@@ -162,7 +162,7 @@ function InterviewTopBarComponent({
           startDragging();
         }
       }}
-      className="bg-slate-950/90 border border-emerald-500/20 shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_20px_rgba(16,185,129,0.06)] rounded-full px-3 py-1.5 flex items-center justify-between gap-2.5 select-none backdrop-blur-2xl text-white max-w-full relative z-50"
+      className="bg-slate-950/90 border border-emerald-500/20 shadow-none rounded-full px-3 py-1.5 flex items-center justify-between gap-2.5 select-none backdrop-blur-2xl text-white max-w-full relative z-50"
     >
       {/* Left: Audio Controls (Shared Audio & Microphone) & Action buttons */}
       <div className="flex items-center gap-1.5">

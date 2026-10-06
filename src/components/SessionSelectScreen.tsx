@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search,
   ArrowUpDown,
@@ -10,7 +10,8 @@ import {
   ExternalLink,
   Plus,
   Loader2,
-  Sparkles
+  Sparkles,
+  RotateCw
 } from 'lucide-react';
 import { openBrowserUrl } from '../utils/browser';
 import { CreateSessionModal } from './CreateSessionModal';
@@ -31,24 +32,36 @@ export interface SessionItem {
 
 interface SessionSelectScreenProps {
   token?: string | null;
+  refreshTrigger?: number;
   onStartSession: (sessionId: string, session?: SessionItem) => void;
   onBuyCredits?: () => void;
 }
 
 export function SessionSelectScreen({
   token,
+  refreshTrigger,
   onStartSession,
 }: SessionSelectScreenProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const loadSessions = async () => {
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef(0);
+  const mouseStartY = useRef<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const loadSessions = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setIsRefreshing(true);
+      }
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -99,15 +112,144 @@ export function SessionSelectScreen({
 
       setSessions(apiSessions);
     } catch {
-      setSessions([]);
+      if (!silent) setSessions([]);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [token]);
+
+  // Initial load
+  useEffect(() => {
+    loadSessions(false);
+  }, [token, loadSessions]);
+
+  // Trigger from parent when deep links arrive or when navigating back
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      loadSessions(true);
+    }
+  }, [refreshTrigger, loadSessions]);
+
+  // Smart Sync: Window focus, Visibility change, Tauri native window focus, and Heartbeat
+  useEffect(() => {
+    let isMounted = true;
+    let lastFocusFetch = 0;
+
+    const handleFocusSync = () => {
+      const now = Date.now();
+      // Debounce focus sync to at most once every 2.5 seconds
+      if (now - lastFocusFetch > 2500) {
+        lastFocusFetch = now;
+        loadSessions(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocusSync);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleFocusSync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Tauri window focus listener
+    let unlistenTauriFocus: (() => void) | undefined;
+    import('@tauri-apps/api/window')
+      .then(({ getCurrentWindow }) => {
+        getCurrentWindow()
+          .onFocusChanged(({ payload: focused }) => {
+            if (focused && isMounted) {
+              handleFocusSync();
+            }
+          })
+          .then((unlisten) => {
+            if (isMounted) unlistenTauriFocus = unlisten;
+            else unlisten();
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+
+    // Keyboard shortcut: Cmd+R / Ctrl+R / F5
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) || e.key === 'F5') {
+        e.preventDefault();
+        loadSessions(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Background polling heartbeat (every 10 seconds while tab/window is visible)
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible' && isMounted) {
+        loadSessions(true);
+      }
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleFocusSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('keydown', handleKeyDown);
+      if (unlistenTauriFocus) unlistenTauriFocus();
+      clearInterval(pollInterval);
+    };
+  }, [loadSessions]);
+
+  // Pull-to-refresh event handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
     }
   };
 
-  useEffect(() => {
-    loadSessions();
-  }, [token]);
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling || isRefreshing) return;
+    const diff = e.touches[0].clientY - touchStartY.current;
+    if (diff > 0 && scrollContainerRef.current?.scrollTop === 0) {
+      setPullDistance(Math.min(diff * 0.45, 65));
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isPulling) return;
+    setIsPulling(false);
+    if (pullDistance >= 40 && !isRefreshing) {
+      loadSessions(false);
+    }
+    setPullDistance(0);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop === 0) {
+      mouseStartY.current = e.clientY;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (mouseStartY.current === null || isRefreshing) return;
+    const diff = e.clientY - mouseStartY.current;
+    if (diff > 8 && scrollContainerRef.current?.scrollTop === 0) {
+      setPullDistance(Math.min((diff - 8) * 0.45, 65));
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (mouseStartY.current !== null) {
+      if (pullDistance >= 40 && !isRefreshing) {
+        loadSessions(false);
+      }
+      mouseStartY.current = null;
+      setPullDistance(0);
+    }
+  };
 
   const handleDeleteSession = async (sessionId: string) => {
     try {
@@ -155,7 +297,7 @@ export function SessionSelectScreen({
 
   return (
     <div className="p-3.5 flex flex-col h-[calc(100%-44px)] overflow-hidden space-y-3 select-none bg-slate-950 text-slate-100">
-      {/* 1. Search Bar & Sort Row */}
+      {/* 1. Search Bar & Action Controls Row */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -168,6 +310,17 @@ export function SessionSelectScreen({
           />
         </div>
 
+        {/* Manual Refresh Button */}
+        <button
+          onClick={() => loadSessions(false)}
+          disabled={isRefreshing}
+          className="p-1.5 bg-slate-900/90 border border-slate-800/80 hover:border-slate-700/80 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 disabled:opacity-60"
+          title="Check for updates (⌘R)"
+        >
+          <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+        </button>
+
+        {/* Sort Button */}
         <button
           onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
           className="p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
@@ -177,25 +330,50 @@ export function SessionSelectScreen({
         </button>
       </div>
 
-      {/* 2. Sessions List */}
-      <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
+      {/* 2. Sessions List with Pull-to-Refresh */}
+      <div
+        ref={scrollContainerRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 relative"
+      >
+        {/* Pull-down indicator */}
+        {(pullDistance > 0 || (isRefreshing && !loading)) && (
+          <div
+            style={{ height: isRefreshing ? '34px' : `${pullDistance}px` }}
+            className="overflow-hidden transition-all duration-150 flex items-center justify-center shrink-0"
+          >
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm">
+              <RotateCw
+                className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`}
+                style={!isRefreshing ? { transform: `rotate(${pullDistance * 6}deg)` } : undefined}
+              />
+              <span>
+                {isRefreshing
+                  ? 'Checking for updates...'
+                  : pullDistance >= 40
+                  ? 'Release to refresh'
+                  : 'Pull down to refresh'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
             <span>Loading dossiers...</span>
           </div>
         ) : sortedSessions.length === 0 ? (
-          <div className="py-14 text-center text-slate-400 text-xs space-y-2.5 border border-dashed border-slate-800 rounded-2xl p-6 bg-slate-900/20">
+          <div className="py-12 text-center text-slate-400 text-xs space-y-2 border border-dashed border-slate-800 rounded-2xl p-6 bg-slate-900/20">
             <p className="text-slate-300 font-medium">No pending interview dossiers found.</p>
             <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
               Completed sessions can be reviewed with transcripts and AI notes on your Web Dashboard.
             </p>
-            <button
-              onClick={handleCreateSession}
-              className="text-emerald-400 font-bold hover:underline cursor-pointer pt-1 inline-block"
-            >
-              + Create new interview dossier
-            </button>
           </div>
         ) : (
           sortedSessions.map((sess) => (

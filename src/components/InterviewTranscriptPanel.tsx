@@ -49,7 +49,7 @@ function InterviewTranscriptPanelComponent({
   }, [transcriptList, interimText]);
 
   return (
-    <div className="bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.85),0_0_20px_rgba(16,185,129,0.05)] backdrop-blur-2xl p-3.5 flex flex-col justify-between text-white w-full min-h-[480px] max-h-[620px]">
+    <div className="bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-none backdrop-blur-2xl p-3.5 flex flex-col justify-between text-white w-full min-h-[480px] max-h-[620px]">
       {/* Header: Equalizer + Language Selector + Clear */}
       <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 select-none">
         {/* Left: Animated Audio Equalizer Bars + Language Selector */}

@@ -346,7 +346,7 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
 
   return (
     <div
-      className={`bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.85),0_0_20px_rgba(16,185,129,0.05)] backdrop-blur-2xl p-4 flex flex-col justify-between text-white transition-all duration-200 ${
+      className={`bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-none backdrop-blur-2xl p-4 flex flex-col justify-between text-white transition-all duration-200 ${
         isExpanded ? 'h-[640px]' : 'min-h-[480px] max-h-[620px]'
       }`}
     >

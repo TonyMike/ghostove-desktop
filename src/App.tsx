@@ -23,6 +23,11 @@ export default function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isPaid, setIsPaid] = useState(true);
   const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
+  const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
+
+  const triggerSessionRefresh = useCallback(() => {
+    setSessionRefreshTrigger((prev) => prev + 1);
+  }, []);
 
   // Enforce screen-share invisibility on launch
   useEffect(() => {
@@ -144,6 +149,9 @@ export default function App() {
       console.warn('[Ghostove Desktop] Could not focus window:', err);
     }
 
+    // Always trigger session refresh whenever any deep link arrives
+    triggerSessionRefresh();
+
     // If starting a session or specified a session id, check access first
     if (
       payload.action === 'start-session' ||
@@ -178,8 +186,10 @@ export default function App() {
       }
 
       setView('connect-session');
+    } else if (payload.action === 'open' || payload.action === 'refresh') {
+      setView('session-select');
     }
-  }, [checkUserAccess, token]);
+  }, [checkUserAccess, token, triggerSessionRefresh]);
 
   // Listen for ghostove:// protocol deep link
   useDeepLink({
@@ -263,6 +273,7 @@ export default function App() {
             jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
             onBackToMenu={() => {
               setSharedAudioStream(null);
+              triggerSessionRefresh();
               setView('session-select');
             }}
             onSwitchToLive={() => setHudMode('live')}
@@ -276,6 +287,7 @@ export default function App() {
             onLogout={handleLogout}
             onBackToMenu={() => {
               setSharedAudioStream(null);
+              triggerSessionRefresh();
               setView('session-select');
             }}
             onOpenScreenPosition={() => setShowScreenPosition(true)}
@@ -317,7 +329,10 @@ export default function App() {
       {!isCollapsed && view === 'plan-required' && (
         <PlanRequiredScreen
           session={selectedSession}
-          onBack={() => setView('session-select')}
+          onBack={() => {
+            triggerSessionRefresh();
+            setView('session-select');
+          }}
           onRefreshCredits={async () => {
             const hasAccess = await checkUserAccess(token);
             return hasAccess;
@@ -337,6 +352,7 @@ export default function App() {
             setView('active-session');
           }}
           onBack={() => {
+            triggerSessionRefresh();
             setView('session-select');
           }}
         />
@@ -345,6 +361,7 @@ export default function App() {
       {!isCollapsed && view === 'session-select' && (
         <SessionSelectScreen
           token={token}
+          refreshTrigger={sessionRefreshTrigger}
           onStartSession={handleSelectSession}
           onBuyCredits={handleBuyCredits}
         />

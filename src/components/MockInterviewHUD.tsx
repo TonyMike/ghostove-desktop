@@ -483,7 +483,7 @@ export function MockInterviewHUD({
             startDragging();
           }
         }}
-        className="w-full max-w-[1040px] mb-3 bg-[#121316]/95 border border-purple-500/30 shadow-2xl rounded-full px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-xl shrink-0"
+        className="w-full max-w-[1040px] mb-3 bg-[#121316]/95 border border-purple-500/30 shadow-none rounded-full px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-xl shrink-0"
       >
         {/* Left: Mode Badge & Target Role */}
         <div className="flex items-center gap-2.5">
@@ -552,7 +552,7 @@ export function MockInterviewHUD({
           {/* Left Column: Question Presentation & Candidate Speech Recording */}
           <div className="flex-1 flex flex-col gap-3 min-w-0 max-w-[560px]">
             {/* Question Card */}
-            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl space-y-3">
+            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-none backdrop-blur-xl space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-white/10 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-purple-400 uppercase tracking-wider text-[11px]">
@@ -645,7 +645,7 @@ export function MockInterviewHUD({
             </div>
 
             {/* Candidate Answer Box with Voice Transcribe */}
-            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex flex-col justify-between space-y-3">
+            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-none backdrop-blur-xl flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-slate-300 flex items-center gap-1.5">
                   <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -739,7 +739,7 @@ export function MockInterviewHUD({
           <div className="w-[460px] shrink-0 flex flex-col gap-3 min-h-[480px]">
             {/* Ideal Model Answer Card (if opened) */}
             {showIdealAnswer && idealAnswer && (
-              <div className="bg-[#121316]/95 border border-purple-500/40 rounded-2xl p-4 shadow-2xl backdrop-blur-xl space-y-2 animate-fade-in">
+              <div className="bg-[#121316]/95 border border-purple-500/40 rounded-2xl p-4 shadow-none backdrop-blur-xl space-y-2 animate-fade-in">
                 <div className="flex items-center justify-between pb-2 border-b border-purple-500/20">
                   <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-purple-400" />
@@ -756,7 +756,7 @@ export function MockInterviewHUD({
             )}
 
             {/* Evaluation Results Card */}
-            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex-1 flex flex-col justify-between space-y-3">
+            <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-none backdrop-blur-xl flex-1 flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-white/10">
                 <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   <Award className="w-4 h-4 text-emerald-400" />
