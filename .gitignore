@@ -1,0 +1,50 @@
+# --- Dependencies ---
+node_modules/
+
+# --- Frontend Build Outputs (Vite) ---
+dist/
+dist-ssr/
+
+# --- Tauri & Rust Build Outputs (CRITICAL) ---
+src-tauri/target/
+target/
+src-tauri/gen/
+
+# --- Packaging & Distribution Artifacts ---
+dmg_staging/
+*.dmg
+*.app
+*.exe
+*.msi
+*.deb
+*.rpm
+*.zip
+
+# --- Environment & Secret Variables ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Operating System Files ---
+.DS_Store
+.DS_Store?
+._*
+[Tt]humbs.db
+ehthumbs.db
+
+# --- IDEs & Editors ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-workspace
+*.sublime-project
