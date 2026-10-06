@@ -1,14 +1,18 @@
 # --- Dependencies ---
 node_modules/
+.pnp
+.pnp.js
 
 # --- Frontend Build Outputs (Vite) ---
 dist/
 dist-ssr/
+.vite/
 
 # --- Tauri & Rust Build Outputs (CRITICAL) ---
 src-tauri/target/
 target/
 src-tauri/gen/
+**/*.rs.bk
 
 # --- Packaging & Distribution Artifacts ---
 dmg_staging/
@@ -19,6 +23,21 @@ dmg_staging/
 *.deb
 *.rpm
 *.zip
+*.tar.gz
+*.tar.xz
+
+# --- Code Signing, Keys & Certificates (NEVER COMMIT) ---
+*.p12
+*.pfx
+*.pem
+*.key
+*.asc
+*.keystore
+*.jks
+*.mobileprovision
+*.provisionprofile
+tauri.key
+*.private.key
 
 # --- Environment & Secret Variables ---
 .env
@@ -26,13 +45,25 @@ dmg_staging/
 .env.*.local
 !.env.example
 
-# --- Logs ---
+# --- Logs & Crash Dumps ---
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+core
+core.*
+*.dmp
+*.dump
+
+# --- Cache & Temporary Files ---
+.cache/
+.turbo/
+*.tmp
+*.temp
+*.swp
+*~
 
 # --- Operating System Files ---
 .DS_Store
@@ -40,6 +71,8 @@ pnpm-debug.log*
 ._*
 [Tt]humbs.db
 ehthumbs.db
+.Spotlight-V100
+.Trashes
 
 # --- IDEs & Editors ---
 .idea/
