@@ -1,14 +1,31 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { InterviewTopBar } from './InterviewTopBar';
-import { InterviewAnswerPanel } from './InterviewAnswerPanel';
-import { InterviewTranscriptPanel } from './InterviewTranscriptPanel';
-import { InterviewChatInput } from './InterviewChatInput';
-import { useRealAudioListener } from '../hooks/useRealAudioListener';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import { InterviewTopBar } from "./InterviewTopBar";
+import { InterviewAnswerPanel } from "./InterviewAnswerPanel";
+import { InterviewTranscriptPanel } from "./InterviewTranscriptPanel";
+import { InterviewChatInput } from "./InterviewChatInput";
+import { useRealAudioListener } from "../hooks/useRealAudioListener";
 
-import { setSelectiveClickThrough, resizeWindow, openPrivacySettings, ClickableRect } from '../utils/windowManager';
-import { openBrowserUrl } from '../utils/browser';
-import { WEB_API_URL, WS_URL } from '../utils/config';
-import { MousePointer, CheckCircle2, ShieldAlert, Zap, ExternalLink } from 'lucide-react';
+import {
+  setSelectiveClickThrough,
+  resizeWindow,
+  openPrivacySettings,
+  ClickableRect,
+} from "../utils/windowManager";
+import { openBrowserUrl } from "../utils/browser";
+import { WEB_API_URL, WS_URL } from "../utils/config";
+import {
+  MousePointer,
+  CheckCircle2,
+  ShieldAlert,
+  Zap,
+  ExternalLink,
+} from "lucide-react";
 
 interface InterviewHUDProps {
   token: string;
@@ -35,7 +52,7 @@ export function InterviewHUD({
 }: InterviewHUDProps) {
   const [showAnswer, setShowAnswer] = useState(true);
   const [showChat, setShowChat] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
+  const [selectedLanguage, setSelectedLanguage] = useState("English");
   const [opacity, setOpacity] = useState(0.95);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [fontSizeLevel, setFontSizeLevel] = useState(0);
@@ -46,26 +63,29 @@ export function InterviewHUD({
 
   // Decode authenticated user email from JWT token payload
   const userEmail = useMemo(() => {
-    if (!token) return 'tee.jhay1@gmail.com';
+    if (!token) return null;
     try {
-      const parts = token.split('.');
+      const parts = token.split(".");
       if (parts.length >= 2) {
-        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
         const jsonPayload = decodeURIComponent(
           atob(base64)
-            .split('')
-            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
+            .split("")
+            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join(""),
         );
         const data = JSON.parse(jsonPayload);
-        return data.email || data.user_email || data.sub || 'tee.jhay1@gmail.com';
+        return data.email || data.user_email || "";
       }
     } catch (_) {}
-    return 'tee.jhay1@gmail.com';
+    return null;
   }, [token]);
 
-  const isCollapsed = externalToggleCollapse ? externalIsCollapsed : localCollapsed;
-  const toggleCollapse = externalToggleCollapse || (() => setLocalCollapsed(!localCollapsed));
+  const isCollapsed = externalToggleCollapse
+    ? externalIsCollapsed
+    : localCollapsed;
+  const toggleCollapse =
+    externalToggleCollapse || (() => setLocalCollapsed(!localCollapsed));
 
   const floatingToggleRef = useRef<HTMLButtonElement>(null);
 
@@ -112,28 +132,42 @@ export function InterviewHUD({
     goToPrevQA,
     goToNextQA,
     pauseStatus,
-  } = useRealAudioListener({ token, selectedLanguage, wsUrl: WS_URL, sessionId, initialSharedStream });
+  } = useRealAudioListener({
+    token,
+    selectedLanguage,
+    wsUrl: WS_URL,
+    sessionId,
+    initialSharedStream,
+  });
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   }, []);
 
-  const handleToggleAnswer = useCallback(() => setShowAnswer((prev) => !prev), []);
+  const handleToggleAnswer = useCallback(
+    () => setShowAnswer((prev) => !prev),
+    [],
+  );
   const handleToggleChat = useCallback(() => setShowChat((prev) => !prev), []);
   const handleCloseChat = useCallback(() => setShowChat(false), []);
 
-  const handleChatSubmit = useCallback((text: string) => {
-    setShowAnswer(true);
-    askQuestion(text, 'Chat');
-  }, [askQuestion]);
+  const handleChatSubmit = useCallback(
+    (text: string) => {
+      setShowAnswer(true);
+      askQuestion(text, "Chat");
+    },
+    [askQuestion],
+  );
 
   const handleScreenshot = useCallback(async () => {
     setShowAnswer(true);
-    showToast('📸 Capturing screen & analyzing coding problem...');
-    const ok = await solveCodingScreen(selectedLanguage || 'Python');
+    showToast("📸 Capturing screen & analyzing coding problem...");
+    const ok = await solveCodingScreen(selectedLanguage || "Python");
     if (!ok) {
-      showToast('⚠️ Screen capture failed. Check macOS screen recording permissions.');
+      showToast(
+        "⚠️ Screen capture failed. Check macOS screen recording permissions.",
+      );
     }
   }, [solveCodingScreen, selectedLanguage, showToast]);
 
@@ -141,25 +175,29 @@ export function InterviewHUD({
 
   const handleEndSession = useCallback(async () => {
     // 1. Calculate duration in seconds
-    const durationSeconds = Math.max(1, Math.round((Date.now() - sessionStartTimeRef.current) / 1000));
+    const durationSeconds = Math.max(
+      1,
+      Math.round((Date.now() - sessionStartTimeRef.current) / 1000),
+    );
 
     // 2. Format transcript text
-    let formattedTranscript = '';
+    let formattedTranscript = "";
     if (transcriptList && transcriptList.length > 0) {
       formattedTranscript = transcriptList
         .filter((t) => t.text && t.text.trim())
         .map((t) => {
-          const speaker = t.speaker === 'You' ? 'Candidate' : (t.speaker || 'Interviewer');
-          const time = t.timestamp ? `[${t.timestamp}] ` : '';
+          const speaker =
+            t.speaker === "You" ? "Candidate" : t.speaker || "Interviewer";
+          const time = t.timestamp ? `[${t.timestamp}] ` : "";
           return `${time}${speaker}: ${t.text.trim()}`;
         })
-        .join('\n');
+        .join("\n");
     } else if (qaHistory && qaHistory.length > 0) {
       formattedTranscript = qaHistory
         .map((qa) => `Interviewer: ${qa.question}\nCandidate: ${qa.answer}`)
-        .join('\n\n');
+        .join("\n\n");
     } else if (currentQuestion || fullAnswer) {
-      formattedTranscript = `Interviewer: ${currentQuestion || 'Interview Question'}\nCandidate: ${fullAnswer || ''}`;
+      formattedTranscript = `Interviewer: ${currentQuestion || "Interview Question"}\nCandidate: ${fullAnswer || ""}`;
     }
 
     // 3. Format AI suggestions from QA history
@@ -173,29 +211,38 @@ export function InterviewHUD({
     // 4. Persist to Cloud Web API (Supabase)
     if (sessionId) {
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
 
         // Save to Next.js Web API
         fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
-          method: 'PATCH',
+          method: "PATCH",
           headers,
           body: JSON.stringify({
-            status: 'completed',
+            status: "completed",
             duration_seconds: durationSeconds,
             transcript: formattedTranscript,
             ai_suggestions: aiSuggestions,
           }),
-        }).catch((err) => console.warn('[InterviewHUD] Web session save error:', err));
+        }).catch((err) =>
+          console.warn("[InterviewHUD] Web session save error:", err),
+        );
 
         // Auto trigger AI note generation
         fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
-          method: 'POST',
+          method: "POST",
           headers,
-          body: JSON.stringify({ action: 'generate_notes' }),
-        }).catch((err) => console.warn('[InterviewHUD] AI notes generation trigger error:', err));
+          body: JSON.stringify({ action: "generate_notes" }),
+        }).catch((err) =>
+          console.warn(
+            "[InterviewHUD] AI notes generation trigger error:",
+            err,
+          ),
+        );
       } catch (err) {
-        console.error('[InterviewHUD] Error saving session on end:', err);
+        console.error("[InterviewHUD] Error saving session on end:", err);
       }
     }
 
@@ -203,57 +250,72 @@ export function InterviewHUD({
     if (onBackToMenu) {
       onBackToMenu();
     }
-  }, [sessionId, token, transcriptList, qaHistory, currentQuestion, fullAnswer, onBackToMenu]);
+  }, [
+    sessionId,
+    token,
+    transcriptList,
+    qaHistory,
+    currentQuestion,
+    fullAnswer,
+    onBackToMenu,
+  ]);
 
   const handleEnableMic = useCallback(() => {
     startRealAudio();
-    openPrivacySettings('microphone');
+    openPrivacySettings("microphone");
   }, [startRealAudio]);
 
   // Keyboard shortcut listener matching the interface
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ⌘↵ or ⌘J: Toggle Answer panel
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'Enter' || e.key.toLowerCase() === 'j')) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        (e.key === "Enter" || e.key.toLowerCase() === "j")
+      ) {
         e.preventDefault();
         setShowAnswer((prev) => !prev);
       }
       // ⌘⇧S: Trigger Screenshot
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "s"
+      ) {
         e.preventDefault();
         handleScreenshot();
       }
       // ⌘K: Toggle Chat
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setShowChat((prev) => !prev);
       }
       // ⌘⇧⌫: Clear Transcripts
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'Backspace') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "Backspace") {
         e.preventDefault();
         clearTranscripts();
-        showToast('Transcript cleared');
+        showToast("Transcript cleared");
       }
       // ⌘⌫: Clear Answer
-      else if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace') {
+      else if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
         e.preventDefault();
         clearAnswer();
-        showToast('Answer cleared');
+        showToast("Answer cleared");
       }
       // ⌘←: Previous Answered Question
-      else if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft') {
+      else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") {
         e.preventDefault();
         goToPrevQA();
       }
       // ⌘→: Next Answered Question
-      else if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight') {
+      else if ((e.metaKey || e.ctrlKey) && e.key === "ArrowRight") {
         e.preventDefault();
         goToNextQA();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [clearAnswer, clearTranscripts, askQuestion, goToPrevQA, goToNextQA]);
 
   // Click-through helper
@@ -329,9 +391,12 @@ export function InterviewHUD({
               <ShieldAlert className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-white tracking-tight">Free Demo Period Concluded</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">
+                Free Demo Period Concluded
+              </h3>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                {quotaExhausted.message || 'You have used your 10-minute trial. Live interview intelligence is now paused. Upgrade to continue receiving real-time answers.'}
+                {quotaExhausted.message ||
+                  "You have used your 10-minute trial. Live interview intelligence is now paused. Upgrade to continue receiving real-time answers."}
               </p>
             </div>
             <div className="space-y-2 pt-2">
@@ -387,7 +452,7 @@ export function InterviewHUD({
           onSelectLanguage={setSelectedLanguage}
           autoAnswer={autoAnswer}
           onAutoAnswerChange={setAutoAnswer}
-          onEdit={() => showToast('Session context & prompt settings')}
+          onEdit={() => showToast("Session context & prompt settings")}
         />
       </div>
 
