@@ -164,8 +164,8 @@ export function useRealAudioListener({
       });
 
       // Send to WebSocket to trigger real backend LLM stream
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        // Collect recent dialogue turns as multi-turn context
+      const sendPayload = () => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
         const recentHistory: { role: string; content: string }[] = [];
         const pastTurns = qaHistoryRef.current.slice(-4);
         for (const item of pastTurns) {
@@ -174,7 +174,6 @@ export function useRealAudioListener({
             recentHistory.push({ role: 'assistant', content: item.answer });
           }
         }
-
         wsRef.current.send(
           JSON.stringify({
             type: 'ask_question',
@@ -182,11 +181,23 @@ export function useRealAudioListener({
             history: recentHistory,
           })
         );
-      } else {
-        // Fallback: Notify that backend socket is not connected
+        return true;
+      };
+
+      if (!sendPayload()) {
         setFullAnswer('Connecting to backend AI streaming engine on localhost:8000...');
-        setIsGenerating(false);
-        setStreamingToken(null);
+        let retries = 0;
+        const checkInterval = setInterval(() => {
+          retries++;
+          if (sendPayload()) {
+            clearInterval(checkInterval);
+            setFullAnswer('');
+          } else if (retries >= 25) {
+            clearInterval(checkInterval);
+            setFullAnswer('Failed to reach AI engine on localhost:8000. Please ensure the backend is running.');
+            setIsGenerating(false);
+          }
+        }, 200);
       }
     },
     []
@@ -334,6 +345,13 @@ export function useRealAudioListener({
       sharedProcessor.connect(sharedMuteGain);
       sharedMuteGain.connect(audioCtx.destination);
 
+      // Connect to analyser so meeting audio also drives HUD visualizer
+      if (analyserRef.current) {
+        try {
+          sharedSource.connect(analyserRef.current);
+        } catch (_) {}
+      }
+
       const audioTracks = audioStream.getAudioTracks();
       if (audioTracks[0]) {
         audioTracks[0].onended = () => {
@@ -358,7 +376,6 @@ export function useRealAudioListener({
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: true,
@@ -836,11 +853,17 @@ export function useRealAudioListener({
                 setIsGenerating(true);
               }
               const tok = data.token || '';
+              const isFirstToken = !fullAnswerRef.current;
               fullAnswerRef.current += tok;
               tokenBufferRef.current += tok;
 
-              // Flush to React state at a throttled 35ms interval (~28 FPS) to eliminate microtask churn
-              if (!tokenFlushTimerRef.current) {
+              if (isFirstToken) {
+                // Immediate 0ms flush for the very first token to deliver instantaneous perceived response
+                setFullAnswer(fullAnswerRef.current);
+                setStreamingToken(tok);
+                tokenBufferRef.current = '';
+              } else if (!tokenFlushTimerRef.current) {
+                // Flush to React state at a throttled 35ms interval (~28 FPS) to eliminate microtask churn
                 tokenFlushTimerRef.current = window.setTimeout(() => {
                   tokenFlushTimerRef.current = null;
                   setFullAnswer(fullAnswerRef.current);
@@ -938,6 +961,23 @@ export function useRealAudioListener({
       attachSharedStream(initialSharedStream);
     }
   }, [initialSharedStream, attachSharedStream]);
+
+  // 14. Auto-resume suspended AudioContext on first user interaction (WebKit / macOS policy)
+  useEffect(() => {
+    const resumeAudio = () => {
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    };
+    window.addEventListener('click', resumeAudio);
+    window.addEventListener('keydown', resumeAudio);
+    window.addEventListener('pointerdown', resumeAudio);
+    return () => {
+      window.removeEventListener('click', resumeAudio);
+      window.removeEventListener('keydown', resumeAudio);
+      window.removeEventListener('pointerdown', resumeAudio);
+    };
+  }, []);
 
   return {
     isMicActive,

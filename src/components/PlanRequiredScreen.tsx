@@ -12,6 +12,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { openBrowserUrl } from '../utils/browser';
+import { WEB_API_URL } from '../utils/config';
 import { SessionItem } from './SessionSelectScreen';
 
 interface PlanRequiredScreenProps {
@@ -31,7 +32,7 @@ export function PlanRequiredScreen({
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const handleOpenBilling = () => {
-    openBrowserUrl('http://localhost:3000/dashboard');
+    openBrowserUrl(`${WEB_API_URL}/dashboard`);
   };
 
   const handleRefresh = async () => {

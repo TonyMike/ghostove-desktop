@@ -30,6 +30,7 @@ import {
 import { startDragging } from '../utils/windowManager';
 import { openBrowserUrl } from '../utils/browser';
 import { Tooltip } from './common/Tooltip';
+import { WEB_API_URL } from '../utils/config';
 
 interface InterviewTopBarProps {
   showAnswer: boolean;
@@ -351,7 +352,7 @@ function InterviewTopBarComponent({
               <button
                 onClick={() => {
                   setShowMoreMenu(false);
-                  openBrowserUrl('http://localhost:3000/dashboard');
+                  openBrowserUrl(`${WEB_API_URL}/dashboard`);
                 }}
                 className="w-full text-left px-2.5 py-2 rounded-xl flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer text-slate-200 hover:text-white font-medium"
               >

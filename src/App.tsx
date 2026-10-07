@@ -12,6 +12,7 @@ import { getStoredToken, setStoredToken, clearStoredToken } from './utils/store'
 import { moveToCursorScreen, resizeWindow } from './utils/windowManager';
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
+import { WEB_API_URL } from './utils/config';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -59,37 +60,23 @@ export default function App() {
   const checkUserAccess = useCallback(async (userToken: string | null): Promise<boolean> => {
     if (!userToken) return false;
     try {
-      const res = await fetch('http://localhost:8000/api/credits', {
+      const resWeb = await fetch(`${WEB_API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${userToken}` },
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (resWeb.ok) {
+        const data = await resWeb.json();
         const hasAccess = !!(
-          data.is_paid ||
-          (data.total_seconds_remaining > 0) ||
-          (data.free_demo_seconds_remaining > 0)
+          data.credits?.is_paid ||
+          (data.credits?.free_demo_seconds_remaining > 0) ||
+          (data.credits?.paid_seconds_balance > 0)
         );
         setIsPaid(hasAccess);
         return hasAccess;
       }
-    } catch {
-      try {
-        const resWeb = await fetch('http://localhost:3000/api/auth/me', {
-          headers: { Authorization: `Bearer ${userToken}` },
-        });
-        if (resWeb.ok) {
-          const data = await resWeb.json();
-          const hasAccess = !!(
-            data.credits?.is_paid ||
-            (data.credits?.free_demo_seconds_remaining > 0) ||
-            (data.credits?.paid_seconds_balance > 0)
-          );
-          setIsPaid(hasAccess);
-          return hasAccess;
-        }
-      } catch {}
+    } catch (err) {
+      console.warn('[Ghostove Desktop] Could not fetch user credits from web API:', err);
     }
-    return true; // Default fallback if servers are in startup
+    return true; // Default fallback if offline
   }, []);
 
   const verifyToken = useCallback(async (tokenToVerify: string): Promise<boolean> => {
@@ -168,9 +155,10 @@ export default function App() {
         created_at: new Date().toISOString(),
       };
       if (payload.sessionId) {
-        // Try to fetch session details from backend
+        // Fetch session details from cloud web API
         try {
-          const res = await fetch(`http://localhost:8000/api/sessions/${payload.sessionId}`);
+          const authHeaders = (payload.token || token) ? { Authorization: `Bearer ${payload.token || token}` } : undefined;
+          const res = await fetch(`${WEB_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
           if (res.ok) {
             const data = await res.json();
             sessionData = data.session || data;
@@ -204,7 +192,7 @@ export default function App() {
   };
 
   const handleBuyCredits = () => {
-    openBrowserUrl('http://localhost:3000/#pricing');
+    openBrowserUrl(`${WEB_API_URL}/#pricing`);
   };
 
   const handleSelectSession = async (sessionId: string, session?: SessionItem) => {

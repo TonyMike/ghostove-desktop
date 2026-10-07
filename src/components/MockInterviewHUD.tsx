@@ -22,6 +22,7 @@ import {
   VolumeX
 } from 'lucide-react';
 import { resizeWindow, startDragging } from '../utils/windowManager';
+import { WEB_API_URL } from '../utils/config';
 
 interface MockInterviewHUDProps {
   token: string;
@@ -345,7 +346,7 @@ export function MockInterviewHUD({
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        fetch(`http://localhost:3000/api/sessions/${sessionId}`, {
+        fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
           method: 'PATCH',
           headers,
           body: JSON.stringify({
@@ -355,18 +356,7 @@ export function MockInterviewHUD({
           }),
         }).catch(() => {});
 
-        fetch('http://localhost:8000/api/sessions/save', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            session_id: sessionId,
-            status: 'completed',
-            duration_seconds: durationSeconds,
-            transcript: formattedTranscript,
-          }),
-        }).catch(() => {});
-
-        fetch(`http://localhost:3000/api/sessions/${sessionId}/ai`, {
+        fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ action: 'generate_notes' }),

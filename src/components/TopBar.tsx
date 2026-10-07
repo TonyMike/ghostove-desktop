@@ -16,6 +16,7 @@ import {
 import { closeAppWindow, minimizeAppWindow, startDragging } from '../utils/windowManager';
 import { ConnectionStatus } from '../hooks/useWebSocketStream';
 import { Tooltip } from './common/Tooltip';
+import { WEB_API_URL } from '../utils/config';
 
 interface TopBarProps {
   status?: ConnectionStatus;
@@ -130,7 +131,7 @@ export function TopBar({
               onClick={() => setShowMoreMenu(false)}
             >
               <button
-                onClick={() => window.open('http://localhost:3000/dashboard', '_blank')}
+                onClick={() => window.open(`${WEB_API_URL}/dashboard`, '_blank')}
                 className="w-full text-left px-3 py-2 rounded-xl flex items-center gap-2 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-slate-400" />

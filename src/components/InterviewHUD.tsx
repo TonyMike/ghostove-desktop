@@ -7,6 +7,7 @@ import { useRealAudioListener } from '../hooks/useRealAudioListener';
 
 import { setSelectiveClickThrough, resizeWindow, openPrivacySettings, ClickableRect } from '../utils/windowManager';
 import { openBrowserUrl } from '../utils/browser';
+import { WEB_API_URL, WS_URL } from '../utils/config';
 import { MousePointer, CheckCircle2, ShieldAlert, Zap, ExternalLink } from 'lucide-react';
 
 interface InterviewHUDProps {
@@ -111,7 +112,7 @@ export function InterviewHUD({
     goToPrevQA,
     goToNextQA,
     pauseStatus,
-  } = useRealAudioListener({ token, selectedLanguage, sessionId, initialSharedStream });
+  } = useRealAudioListener({ token, selectedLanguage, wsUrl: WS_URL, sessionId, initialSharedStream });
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -169,14 +170,14 @@ export function InterviewHUD({
       source: qa.sourceType,
     }));
 
-    // 4. Persist to Web API (Supabase) and Backend (Postgres)
+    // 4. Persist to Cloud Web API (Supabase)
     if (sessionId) {
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         // Save to Next.js Web API
-        fetch(`http://localhost:3000/api/sessions/${sessionId}`, {
+        fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
           method: 'PATCH',
           headers,
           body: JSON.stringify({
@@ -187,21 +188,8 @@ export function InterviewHUD({
           }),
         }).catch((err) => console.warn('[InterviewHUD] Web session save error:', err));
 
-        // Save to FastAPI backend
-        fetch('http://localhost:8000/api/sessions/save', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            session_id: sessionId,
-            status: 'completed',
-            duration_seconds: durationSeconds,
-            transcript: formattedTranscript,
-            ai_suggestions: aiSuggestions,
-          }),
-        }).catch((err) => console.warn('[InterviewHUD] Backend session save error:', err));
-
         // Auto trigger AI note generation
-        fetch(`http://localhost:3000/api/sessions/${sessionId}/ai`, {
+        fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ action: 'generate_notes' }),
@@ -348,7 +336,7 @@ export function InterviewHUD({
             </div>
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => openBrowserUrl('http://localhost:3000/dashboard')}
+                onClick={() => openBrowserUrl(`${WEB_API_URL}/dashboard`)}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
               >
                 <Zap className="w-4 h-4 fill-slate-950" />

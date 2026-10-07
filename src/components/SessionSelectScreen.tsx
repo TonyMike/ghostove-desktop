@@ -11,9 +11,11 @@ import {
   Plus,
   Loader2,
   Sparkles,
-  RotateCw
+  RotateCw,
+  BookOpen,
 } from 'lucide-react';
 import { openBrowserUrl } from '../utils/browser';
+import { WEB_API_URL } from '../utils/config';
 import { CreateSessionModal } from './CreateSessionModal';
 
 export interface SessionItem {
@@ -22,6 +24,8 @@ export interface SessionItem {
   company_name?: string;
   job_description?: string;
   role?: string;
+  resume_id?: string | null;
+  document_id?: string | null;
   status?: string;
   mode: string;
   duration_seconds: number;
@@ -69,23 +73,13 @@ export function SessionSelectScreen({
 
       let rawSessions: any[] = [];
       try {
-        const res = await fetch('http://localhost:8000/api/sessions?uncompleted_only=true', { headers });
-        if (res.ok) {
-          const data = await res.json();
-          rawSessions = data.sessions || [];
+        const resWeb = await fetch(`${WEB_API_URL}/api/sessions`, { headers });
+        if (resWeb.ok) {
+          const dataWeb = await resWeb.json();
+          rawSessions = dataWeb.sessions || [];
         }
-      } catch {
-        // Fallback to web Next.js API
-      }
-
-      if (rawSessions.length === 0) {
-        try {
-          const resWeb = await fetch('http://localhost:3000/api/sessions', { headers });
-          if (resWeb.ok) {
-            const dataWeb = await resWeb.json();
-            rawSessions = dataWeb.sessions || [];
-          }
-        } catch {}
+      } catch (err) {
+        console.warn('[SessionSelect] Error fetching sessions from web API:', err);
       }
 
       // Filter out completed sessions - completed sessions cannot be retaken in desktop HUD
@@ -103,6 +97,8 @@ export function SessionSelectScreen({
           company_name: s.company_name || s.title || 'Company',
           job_description: s.job_description || s.transcript_snippet || '',
           role: s.role || '',
+          resume_id: s.resume_id || null,
+          document_id: s.document_id || null,
           status: s.status || 'not_started',
           mode: s.mode || 'Interview',
           duration_seconds: s.duration_seconds || 0,
@@ -257,10 +253,8 @@ export function SessionSelectScreen({
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      // Delete on backend
-      await fetch(`http://localhost:8000/api/sessions/${sessionId}`, { method: 'DELETE', headers }).catch(() => {});
-      // Also sync delete on web if reachable
-      await fetch(`http://localhost:3000/api/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {});
+      // Delete session via cloud web API
+      await fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, { method: 'DELETE', headers }).catch(() => {});
     } catch {
       // ignore
     }
@@ -268,7 +262,7 @@ export function SessionSelectScreen({
     setActiveMenuSessionId(null);
   };
 
-  const handleOpenDashboard = () => openBrowserUrl('http://localhost:3000/dashboard/sessions');
+  const handleOpenDashboard = () => openBrowserUrl(`${WEB_API_URL}/dashboard/sessions`);
   const handleCreateSession = () => setIsCreateModalOpen(true);
 
   const formatDate = (isoStr: string) => {
@@ -457,6 +451,20 @@ export function SessionSelectScreen({
                   >
                     {(sess.mode || '').toLowerCase().includes('mock') ? 'Mock Practice' : 'Live Co-pilot'}
                   </span>
+
+                  {sess.resume_id && (
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-medium flex items-center gap-1">
+                      <FileText className="w-2.5 h-2.5 text-emerald-400" />
+                      <span>Resume</span>
+                    </span>
+                  )}
+
+                  {sess.document_id && (
+                    <span className="px-2 py-0.5 rounded-md bg-teal-500/10 border border-teal-500/20 text-teal-400 text-[10px] font-medium flex items-center gap-1">
+                      <BookOpen className="w-2.5 h-2.5 text-teal-400" />
+                      <span>Doc</span>
+                    </span>
+                  )}
 
                   {sess.save_transcript && (
                     <span className="px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-slate-400 text-[10px] font-medium flex items-center gap-1">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Ghost, ExternalLink, ShieldCheck, Loader2, Sparkles } from 'lucide-react';
 import { TopBar } from './TopBar';
+import { WEB_API_URL } from '../utils/config';
 
 interface AuthScreenProps {
   onManualTokenSubmit?: (token: string) => void;
@@ -9,7 +10,7 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({
-  webAuthUrl = 'http://localhost:3000/auth/desktop-auth',
+  webAuthUrl = `${WEB_API_URL}/auth/desktop-auth`,
   onOpenScreenPosition,
 }: AuthScreenProps) {
   const [isOpeningBrowser, setIsOpeningBrowser] = useState(false);

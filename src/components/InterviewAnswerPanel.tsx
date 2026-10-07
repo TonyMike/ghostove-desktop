@@ -322,12 +322,12 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
                   );
                 }
 
-                // 5. Clean Paragraph
+                // 5. Clean Paragraph (for direct concepts & short narratives)
                 return (
                   <p
                     key={idx}
-                    style={{ fontSize: `${baseSize}px`, lineHeight: 1.6 }}
-                    className="text-slate-200"
+                    style={{ fontSize: `${baseSize}px`, lineHeight: 1.65 }}
+                    className="text-slate-100 leading-relaxed tracking-normal"
                   >
                     {renderFormattedInline(trimmed)}
                   </p>
