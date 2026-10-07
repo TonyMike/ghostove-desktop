@@ -44,6 +44,8 @@ tauri.key
 .env.local
 .env.*.local
 !.env.example
+.env.development
+.env.production
 
 # --- Logs & Crash Dumps ---
 logs/

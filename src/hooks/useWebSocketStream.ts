@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { WS_URL } from '../utils/config';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'transcribing' | 'generating' | 'quota_exhausted';
 
@@ -22,7 +23,7 @@ function formatCurrentTime(): string {
   return `${hrs}:${mins}`;
 }
 
-export function useWebSocketStream({ token, wsUrl = 'ws://localhost:8000/ws' }: UseWebSocketStreamProps) {
+export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStreamProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [transcript, setTranscript] = useState<{ text: string; isFinal: boolean } | null>(null);
   const [interimText, setInterimText] = useState<string>('');
@@ -89,7 +90,7 @@ export function useWebSocketStream({ token, wsUrl = 'ws://localhost:8000/ws' }: 
         })
       );
     } else {
-      setFullAnswer('Connecting to backend AI streaming engine on localhost:8000...');
+      setFullAnswer('Connecting to backend AI streaming engine...');
       setStatus('connected');
       setStreamingToken(null);
     }

@@ -1,4 +1,4 @@
-import { WEB_API_URL } from './config';
+import { WEB_API_URL, BACKEND_API_URL } from './config';
 
 export interface TelemetryPayload {
   userId?: string | null;
@@ -23,7 +23,7 @@ export async function emitTelemetry(payload: TelemetryPayload): Promise<void> {
 
   try {
     // 1. Try FastAPI backend telemetry endpoint
-    fetch('http://localhost:8000/api/telemetry/event', {
+    fetch(`${BACKEND_API_URL}/api/telemetry/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

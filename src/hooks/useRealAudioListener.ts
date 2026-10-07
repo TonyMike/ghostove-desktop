@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { floatTo16BitPCM, resampleTo16kHz } from '../utils/pcmEncoder';
 import { captureScreen } from '../utils/windowManager';
+import { WS_URL } from '../utils/config';
 
 export interface TranscriptItem {
   id: string;
@@ -36,7 +37,7 @@ function formatCurrentTime(): string {
 export function useRealAudioListener({
   token,
   selectedLanguage = 'English',
-  wsUrl = 'ws://localhost:8000/ws',
+  wsUrl = WS_URL,
   sessionId,
   initialSharedStream,
 }: UseRealAudioListenerProps) {
@@ -185,7 +186,7 @@ export function useRealAudioListener({
       };
 
       if (!sendPayload()) {
-        setFullAnswer('Connecting to backend AI streaming engine on localhost:8000...');
+        setFullAnswer('Connecting to backend AI streaming engine...');
         let retries = 0;
         const checkInterval = setInterval(() => {
           retries++;
@@ -194,7 +195,7 @@ export function useRealAudioListener({
             setFullAnswer('');
           } else if (retries >= 25) {
             clearInterval(checkInterval);
-            setFullAnswer('Failed to reach AI engine on localhost:8000. Please ensure the backend is running.');
+            setFullAnswer('Failed to reach AI streaming engine. Please ensure the backend is running.');
             setIsGenerating(false);
           }
         }, 200);

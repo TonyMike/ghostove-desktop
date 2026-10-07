@@ -22,7 +22,7 @@ import {
   VolumeX
 } from 'lucide-react';
 import { resizeWindow, startDragging } from '../utils/windowManager';
-import { WEB_API_URL } from '../utils/config';
+import { WEB_API_URL, BACKEND_API_URL } from '../utils/config';
 
 interface MockInterviewHUDProps {
   token: string;
@@ -104,7 +104,7 @@ export function MockInterviewHUD({
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch('http://localhost:8000/api/mock-interview/generate-questions', {
+        const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ job_title: jobTitle }),
@@ -270,7 +270,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('http://localhost:8000/api/mock-interview/evaluate-response', {
+      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/evaluate-response`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -382,7 +382,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('http://localhost:8000/api/mock-interview/ideal-answer', {
+      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/ideal-answer`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -442,7 +442,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('http://localhost:8000/api/mock-interview/generate-questions', {
+      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_title: jobTitle }),

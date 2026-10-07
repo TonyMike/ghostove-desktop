@@ -12,7 +12,7 @@ import { getStoredToken, setStoredToken, clearStoredToken } from './utils/store'
 import { moveToCursorScreen, resizeWindow } from './utils/windowManager';
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
-import { WEB_API_URL } from './utils/config';
+import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function App() {
 
   const verifyToken = useCallback(async (tokenToVerify: string): Promise<boolean> => {
     try {
-      const res = await fetch(`http://localhost:8000/api/session/verify-token?token=${tokenToVerify}`);
+      const res = await fetch(`${BACKEND_API_URL}/api/session/verify-token?token=${tokenToVerify}`);
       if (res.ok) {
         const data = await res.json();
         return data.valid === true;
