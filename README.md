@@ -65,7 +65,7 @@ ghostove-desktop/
 │   │   ├── AuthScreen.tsx          # "Authentication Required" & pairing view
 │   │   ├── HUDOverlay.tsx          # Floating HUD layout container
 │   │   ├── TopBar.tsx              # Connection status & trial timer
-│   │   ├── TranscriptBox.tsx       # Deepgram Nova-2 rolling transcript stream
+│   │   ├── TranscriptBox.tsx       # Real-time rolling transcript stream
 │   │   ├── AISuggestionsPanel.tsx  # Claude 3.5 Sonnet STAR method talking points
 │   │   ├── QuotaWarningBanner.tsx  # Quota exhausted in-HUD alert
 │   │   └── ControlBar.tsx          # Opacity slider, click-through & code snip hotkey

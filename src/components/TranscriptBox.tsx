@@ -21,7 +21,7 @@ export function TranscriptBox({ transcript }: TranscriptBoxProps) {
           <Mic className="w-3.5 h-3.5 text-emerald-400" />
           <span>Live Conversation Stream</span>
         </span>
-        <span className="text-[10px] text-slate-500 font-mono">Deepgram Nova-2</span>
+        <span className="text-[10px] text-slate-500 font-mono">Real-Time Audio</span>
       </div>
 
       <div
