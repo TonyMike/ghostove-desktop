@@ -15,4 +15,4 @@ export const WS_URL =
 
 export const WEB_API_URL =
   import.meta.env.VITE_WEB_API_URL ||
-  (isProd ? 'https://ghostove-web.tee-jhay1.workers.dev' : 'http://localhost:3000');
+  (isProd ? "https://ghostove-web.vercel.app" : "http://localhost:3000");
