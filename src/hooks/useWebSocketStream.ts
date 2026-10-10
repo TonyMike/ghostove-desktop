@@ -158,6 +158,13 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
         } else if (msgType === 'llm_end') {
           setStatus('connected');
           setStreamingToken(null);
+        } else if (msgType === 'llm_reset') {
+          setFullAnswer('');
+          setStreamingToken('');
+        } else if (msgType === 'error' && data.code === 'llm_provider_unavailable') {
+          setStatus('connected');
+          setStreamingToken(null);
+          setFullAnswer(`⚠️ ${data.message || 'The selected AI provider could not generate an answer. Please try again later.'}`);
         }
       } catch (e) {
         // Ignore non-json frames

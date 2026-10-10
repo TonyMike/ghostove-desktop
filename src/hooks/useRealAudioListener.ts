@@ -898,6 +898,35 @@ export function useRealAudioListener({
                 qaHistoryRef.current = updatedList;
                 return updatedList;
               });
+            } else if (data.type === 'llm_reset') {
+              if (tokenFlushTimerRef.current) {
+                clearTimeout(tokenFlushTimerRef.current);
+                tokenFlushTimerRef.current = null;
+              }
+              tokenBufferRef.current = '';
+              fullAnswerRef.current = '';
+              setFullAnswer('');
+              setStreamingToken('');
+            } else if (data.type === 'error' && data.code === 'llm_provider_unavailable') {
+              const errorMessage = `⚠️ ${data.message || 'The selected AI provider could not generate an answer. Please try again later.'}`;
+              fullAnswerRef.current = errorMessage;
+              if (tokenFlushTimerRef.current) {
+                clearTimeout(tokenFlushTimerRef.current);
+                tokenFlushTimerRef.current = null;
+              }
+              tokenBufferRef.current = '';
+              isGeneratingRef.current = false;
+              setIsGenerating(false);
+              setStreamingToken(null);
+              setFullAnswer(errorMessage);
+              setQaHistory((hList) => {
+                if (hList.length === 0) return hList;
+                const lastIdx = hList.length - 1;
+                const updatedList = [...hList];
+                updatedList[lastIdx] = { ...updatedList[lastIdx], answer: errorMessage };
+                qaHistoryRef.current = updatedList;
+                return updatedList;
+              });
             } else if (data.type === 'quota_exhausted') {
               console.warn('[RealAudio WS] Quota exhausted:', data.message);
               setFullAnswer('⚠️ ' + (data.message || 'Demo session finished (10 minutes used). Please upgrade in your web dashboard to continue.'));

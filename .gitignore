@@ -62,6 +62,7 @@ core.*
 # --- Cache & Temporary Files ---
 .cache/
 .turbo/
+*.tsbuildinfo
 *.tmp
 *.temp
 *.swp
