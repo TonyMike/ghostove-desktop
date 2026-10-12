@@ -277,7 +277,7 @@ export function MockInterviewHUD({
           job_title: jobTitle,
           question_text: questions[currentIndex],
           candidate_response: textToEvaluate,
-          model: 'gemini',
+          model: 'gemini-3.5-flash',
         }),
       });
 
@@ -388,7 +388,7 @@ export function MockInterviewHUD({
         body: JSON.stringify({
           job_title: jobTitle,
           question_text: questions[currentIndex],
-          model: 'gemini',
+          model: 'gemini-3.5-flash',
         }),
       });
 

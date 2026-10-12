@@ -268,6 +268,25 @@ export function InterviewHUD({
   // Keyboard shortcut listener matching the interface
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ⌘M or Ctrl+M: Toggle microphone mute
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "m"
+      ) {
+        if (e.repeat) return;
+        e.preventDefault();
+        if (micError) {
+          handleEnableMic();
+          showToast("Opening microphone settings");
+        } else {
+          void toggleMic();
+          showToast(isMicActive ? "Microphone muted" : "Microphone unmuted");
+        }
+        return;
+      }
+
       // ⌘↵ or ⌘J: Toggle Answer panel
       if (
         (e.metaKey || e.ctrlKey) &&
@@ -316,7 +335,19 @@ export function InterviewHUD({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [clearAnswer, clearTranscripts, askQuestion, goToPrevQA, goToNextQA]);
+  }, [
+    askQuestion,
+    clearAnswer,
+    clearTranscripts,
+    goToNextQA,
+    goToPrevQA,
+    handleEnableMic,
+    handleScreenshot,
+    isMicActive,
+    micError,
+    showToast,
+    toggleMic,
+  ]);
 
   // Click-through helper
   const handleToggleClickThrough = async () => {

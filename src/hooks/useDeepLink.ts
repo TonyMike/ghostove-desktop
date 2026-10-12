@@ -20,7 +20,7 @@ export function useDeepLink({ onTokenReceived, onDeepLink }: UseDeepLinkProps) {
       try {
         const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
         unlisten = await onOpenUrl((urls) => {
-          console.log('[DeepLink] Received URLs:', urls);
+          console.log('[DeepLink] Received URL event:', urls.length);
           for (const urlStr of urls) {
             try {
               // Normalize custom protocol for URL parsing

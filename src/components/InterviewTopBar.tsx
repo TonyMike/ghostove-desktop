@@ -200,6 +200,7 @@ function InterviewTopBarComponent({
               ? 'Microphone: Active (Click to mute)'
               : 'Microphone: Muted (Click to unmute)'
           }
+          shortcut="⌘M"
           position="bottom"
         >
           <button

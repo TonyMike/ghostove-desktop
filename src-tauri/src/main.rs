@@ -2,6 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(unexpected_cfgs)]
 
+mod dev_pairing;
+
 #[cfg(target_os = "macos")]
 #[macro_use]
 extern crate objc;
@@ -871,6 +873,7 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .manage(dev_pairing::DevPairingState::default())
         .manage(ClickThroughManager::default())
         .manage(ScreenStateManager::default())
         .invoke_handler(tauri::generate_handler![
@@ -891,9 +894,15 @@ fn main() {
             resize_app_window,
             start_dragging_window,
             capture_screen,
-            check_system_permissions
+            check_system_permissions,
+            dev_pairing::take_dev_pairing_token
         ])
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            if let Err(error) = dev_pairing::start(app.handle()) {
+                eprintln!("[Ghostove Dev Pairing] {error}");
+            }
+
             #[cfg(target_os = "macos")]
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 

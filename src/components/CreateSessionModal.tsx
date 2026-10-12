@@ -63,7 +63,7 @@ export function CreateSessionModal({
 
   // Step 2: Preferences
   const [language, setLanguage] = useState('English');
-  const [model, setModel] = useState('gemini');
+  const [model, setModel] = useState('gemini-3.5-flash');
   const [aiInstructions, setAiInstructions] = useState('');
   const [showInstructions, setShowInstructions] = useState(false);
   const [saveTranscript, setSaveTranscript] = useState(true);
@@ -303,7 +303,10 @@ export function CreateSessionModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSessionType('mock')}
+                    onClick={() => {
+                      setSessionType('mock');
+                      if (model === 'claude-haiku-5-5') setModel('gemini-3.5-flash');
+                    }}
                     className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       sessionType === 'mock'
                         ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
@@ -574,7 +577,7 @@ export function CreateSessionModal({
                 </select>
               </div>
 
-              {/* Model Selection - STRICTLY GEMINI AND CHATGPT */}
+              {/* Model Selection */}
               <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <Cpu className="w-4 h-4 text-purple-500" />
@@ -588,8 +591,11 @@ export function CreateSessionModal({
                   onChange={(e) => setModel(e.target.value)}
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-slate-200 font-medium"
                 >
-                  <option value="gemini">⚡ Gemini (Google AI)</option>
+                  <option value="gemini-3.5-flash">⚡ Gemini 3.5 Flash</option>
                   <option value="chatgpt">🚀 ChatGPT (OpenAI)</option>
+                  {sessionType === 'interview' && (
+                    <option value="claude-haiku-5-5">✨ Claude Haiku 5.5</option>
+                  )}
                 </select>
               </div>
 

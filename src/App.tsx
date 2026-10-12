@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { TopBar } from './components/TopBar';
 import { SessionSelectScreen, SessionItem } from './components/SessionSelectScreen';
@@ -25,6 +25,7 @@ export default function App() {
   const [isPaid, setIsPaid] = useState(true);
   const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
+  const pairingTokenReceived = useRef(false);
 
   const triggerSessionRefresh = useCallback(() => {
     setSessionRefreshTrigger((prev) => prev + 1);
@@ -98,12 +99,14 @@ export default function App() {
       const stored = await getStoredToken();
       if (stored) {
         const isValid = await verifyToken(stored);
-        if (isValid) {
-          setToken(stored);
-          checkUserAccess(stored);
-        } else {
-          await clearStoredToken();
-          setToken(null);
+        if (!pairingTokenReceived.current) {
+          if (isValid) {
+            setToken(stored);
+            checkUserAccess(stored);
+          } else {
+            await clearStoredToken();
+            setToken(null);
+          }
         }
       }
       setLoading(false);
@@ -112,13 +115,27 @@ export default function App() {
   }, [verifyToken, checkUserAccess]);
 
   const handleTokenReceived = useCallback(async (newToken: string) => {
+    pairingTokenReceived.current = true;
     await setStoredToken(newToken);
     setToken(newToken);
     setView('session-select');
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const win = getCurrentWindow();
+      await win.show();
+      await win.unminimize();
+      await win.setFocus();
+    } catch (err) {
+      console.warn('[Ghostove Desktop] Could not focus window after local pairing:', err);
+    }
   }, []);
 
   const handleDeepLink = useCallback(async (payload: DeepLinkPayload) => {
-    console.log('[Ghostove Desktop] Deep link received:', payload);
+    console.log('[Ghostove Desktop] Deep link received:', {
+      action: payload.action,
+      sessionId: payload.sessionId,
+      hasToken: Boolean(payload.token),
+    });
 
     if (payload.token) {
       await setStoredToken(payload.token);
@@ -184,6 +201,39 @@ export default function App() {
     onTokenReceived: handleTokenReceived,
     onDeepLink: handleDeepLink,
   });
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    async function listenForDevPairing() {
+      try {
+        const [{ listen }, { invoke }] = await Promise.all([
+          import('@tauri-apps/api/event'),
+          import('@tauri-apps/api/core'),
+        ]);
+        if (cancelled) return;
+
+        unlisten = await listen<string>('dev-pairing-token', (event) => {
+          if (event.payload) void handleTokenReceived(event.payload);
+        });
+
+        // The local bridge buffers the token in case pairing completes before this listener mounts.
+        const pendingToken = await invoke<string | null>('take_dev_pairing_token');
+        if (pendingToken) await handleTokenReceived(pendingToken);
+      } catch (error) {
+        console.warn('[Ghostove Desktop] Dev pairing listener is unavailable:', error);
+      }
+    }
+
+    void listenForDevPairing();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [handleTokenReceived]);
 
   const handleLogout = async () => {
     await clearStoredToken();

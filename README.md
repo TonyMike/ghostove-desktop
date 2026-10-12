@@ -46,6 +46,10 @@ npm install
 npm run tauri dev
 ```
 
+### Pairing the development app
+
+When Ghostove Web is running at `http://localhost:3000`, the desktop pairing page sends the sign-in token to the development app's loopback bridge at `127.0.0.1:1422`. Keep `npm run tauri dev` running and leave port `1422` available. Pairing from the production website continues to use the `ghostove://` protocol.
+
 ---
 
 ## 📦 Project Structure
