@@ -907,8 +907,14 @@ export function useRealAudioListener({
               fullAnswerRef.current = '';
               setFullAnswer('');
               setStreamingToken('');
-            } else if (data.type === 'error' && data.code === 'llm_provider_unavailable') {
-              const errorMessage = `⚠️ ${data.message || 'The selected AI provider could not generate an answer. Please try again later.'}`;
+            } else if (
+              data.type === 'error' &&
+              ['llm_provider_unavailable', 'answer_generation_failed', 'stt_provider_unavailable'].includes(data.code)
+            ) {
+              const errorMessage = `⚠️ ${data.message || 'Ghostove could not process that interview question. Please try again.'}`;
+              if (data.code === 'stt_provider_unavailable') {
+                setMicError(data.message || 'Live speech recognition could not connect.');
+              }
               fullAnswerRef.current = errorMessage;
               if (tokenFlushTimerRef.current) {
                 clearTimeout(tokenFlushTimerRef.current);

@@ -161,7 +161,10 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
         } else if (msgType === 'llm_reset') {
           setFullAnswer('');
           setStreamingToken('');
-        } else if (msgType === 'error' && data.code === 'llm_provider_unavailable') {
+        } else if (
+          msgType === 'error' &&
+          ['llm_provider_unavailable', 'answer_generation_failed'].includes(data.code)
+        ) {
           setStatus('connected');
           setStreamingToken(null);
           setFullAnswer(`⚠️ ${data.message || 'The selected AI provider could not generate an answer. Please try again later.'}`);
