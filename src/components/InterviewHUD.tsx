@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { InterviewTopBar } from "./InterviewTopBar";
+import { EndSessionDialog } from "./common/EndSessionDialog";
 import { InterviewAnswerPanel } from "./InterviewAnswerPanel";
 import { InterviewTranscriptPanel } from "./InterviewTranscriptPanel";
 import { InterviewChatInput } from "./InterviewChatInput";
@@ -60,6 +61,7 @@ export function InterviewHUD({
   const [isClickThrough, setIsClickThrough] = useState(false);
   const [localCollapsed, setLocalCollapsed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
 
   // Decode authenticated user email from JWT token payload
   const userEmail = useMemo(() => {
@@ -109,6 +111,7 @@ export function InterviewHUD({
   const {
     isMicActive,
     isSharedAudioActive,
+    isBackendConnected,
     toggleMic,
     toggleSharedAudio,
     isSpeaking,
@@ -138,6 +141,7 @@ export function InterviewHUD({
     wsUrl: WS_URL,
     sessionId,
     initialSharedStream,
+    autoAnswer,
   });
 
   const showToast = useCallback((msg: string) => {
@@ -154,10 +158,14 @@ export function InterviewHUD({
 
   const handleChatSubmit = useCallback(
     (text: string) => {
+      if (!isBackendConnected) {
+        showToast("Reconnect to ask Ghostove");
+        return;
+      }
       setShowAnswer(true);
       askQuestion(text, "Chat");
     },
-    [askQuestion],
+    [askQuestion, isBackendConnected, showToast],
   );
 
   const handleScreenshot = useCallback(async () => {
@@ -259,6 +267,13 @@ export function InterviewHUD({
     fullAnswer,
     onBackToMenu,
   ]);
+
+  const requestEndSession = useCallback(() => setShowEndSessionDialog(true), []);
+  const cancelEndSession = useCallback(() => setShowEndSessionDialog(false), []);
+  const confirmEndSession = useCallback(() => {
+    setShowEndSessionDialog(false);
+    void handleEndSession();
+  }, [handleEndSession]);
 
   const handleEnableMic = useCallback(() => {
     startRealAudio();
@@ -440,7 +455,7 @@ export function InterviewHUD({
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={handleEndSession}
+                onClick={requestEndSession}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs cursor-pointer border border-slate-800 transition-colors"
               >
                 <span>Exit Session & Back to Dashboard</span>
@@ -451,6 +466,11 @@ export function InterviewHUD({
       )}
 
       {/* 1. Floating Top Bar Matching Reference Photo */}
+      <EndSessionDialog
+        isOpen={showEndSessionDialog}
+        onCancel={cancelEndSession}
+        onConfirm={confirmEndSession}
+      />
       <div className="w-full max-w-[1040px] mb-3 shrink-0 relative z-50">
         <InterviewTopBar
           showAnswer={showAnswer}
@@ -458,7 +478,7 @@ export function InterviewHUD({
           showChat={showChat}
           onToggleChat={handleToggleChat}
           onScreenshot={handleScreenshot}
-          onEndSession={handleEndSession}
+          onEndSession={requestEndSession}
           isSpeaking={isSpeaking}
           isMicActive={isMicActive}
           onToggleMic={toggleMic}

@@ -103,29 +103,76 @@ use tauri::{Manager, WebviewWindow};
 // OS-Specific Screen-Share Invisibility & Virtual Desktop Behaviors
 // -------------------------------------------------------------------
 
-#[cfg(target_os = "windows")]
-fn apply_screen_share_invisibility(window: &WebviewWindow) -> Result<(), String> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE};
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct ScreenShareProtectionStatus {
+    pub platform: String,
+    pub status: String,
+    pub method: String,
+    pub message: String,
+}
 
-    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
-    unsafe {
-        // WDA_EXCLUDEFROMCAPTURE = 0x00000011
-        // Omits window from Zoom, Teams, Meet, and OBS screen captures
-        let res = SetWindowDisplayAffinity(hwnd.0 as _, WDA_EXCLUDEFROMCAPTURE);
-        if res == 0 {
-            return Err("Failed to call SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)".into());
+#[cfg(target_os = "windows")]
+fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtectionStatus {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowDisplayAffinity, SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+    };
+
+    let hwnd = match window.hwnd() {
+        Ok(hwnd) => hwnd,
+        Err(error) => {
+            return ScreenShareProtectionStatus {
+                platform: "windows".into(),
+                status: "failed".into(),
+                method: "SetWindowDisplayAffinity".into(),
+                message: format!("Could not access the Ghostove window: {error}"),
+            };
         }
+    };
+
+    let applied = unsafe { SetWindowDisplayAffinity(hwnd.0 as _, WDA_EXCLUDEFROMCAPTURE) };
+    if applied == 0 {
+        return ScreenShareProtectionStatus {
+            platform: "windows".into(),
+            status: "failed".into(),
+            method: "SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)".into(),
+            message: "Windows could not apply capture exclusion to the Ghostove window.".into(),
+        };
     }
-    println!("[Ghostove Windows] Applied SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)");
-    Ok(())
+
+    let mut current_affinity = 0;
+    let verified = unsafe {
+        GetWindowDisplayAffinity(hwnd.0 as _, &mut current_affinity) != 0
+            && current_affinity == WDA_EXCLUDEFROMCAPTURE
+    };
+
+    ScreenShareProtectionStatus {
+        platform: "windows".into(),
+        status: if verified { "applied" } else { "unverified" }.into(),
+        method: "SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)".into(),
+        message: if verified {
+            "Windows reports the capture-exclusion flag is set. Effective exclusion requires Windows 10 version 2004 or newer and supported OS capture paths; other sharing methods may still capture this window.".into()
+        } else {
+            "Windows accepted the capture-exclusion request, but Ghostove could not verify the active setting.".into()
+        },
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn apply_screen_share_invisibility(window: &WebviewWindow) -> Result<(), String> {
+fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtectionStatus {
     use macos_types::*;
     use macos_panel::*;
 
-    let ns_window_ptr = window.ns_window().map_err(|e| e.to_string())?;
+    let ns_window_ptr = match window.ns_window() {
+        Ok(window) => window,
+        Err(error) => {
+            return ScreenShareProtectionStatus {
+                platform: "macos".into(),
+                status: "failed".into(),
+                method: "NSWindow sharing exclusion request".into(),
+                message: format!("Could not access the Ghostove window: {error}"),
+            };
+        }
+    };
     let ns_window = ns_window_ptr as Id;
     unsafe {
         // 1. Convert TaoWindow (NSWindow) into GhostoveFloatingPanel (NSPanel subclass)
@@ -141,7 +188,8 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> Result<(), String>
         let current_mask: usize = msg_send![ns_window, styleMask];
         let _: () = msg_send![ns_window, setStyleMask: current_mask | NS_WINDOW_STYLE_MASK_NONACTIVATING_PANEL];
 
-        // 4. Invisibility from screen shares / capture:
+        // 4. Best-effort sharing exclusion request. Apple marks this setting as legacy;
+        // it is not reliable evidence that modern screen-sharing clients omit the window.
         let _: () = msg_send![ns_window, setSharingType: 0usize];
 
         // 5. Ensure the panel never hides when deactivated
@@ -168,14 +216,24 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> Result<(), String>
         let _: () = msg_send![ns_window, orderFrontRegardless];
     }
     println!("[Ghostove macOS] Converted to NSPanel, NonactivatingPanel, CanJoinAllSpaces, FullScreenAuxiliary, Level 1000, and orderFrontRegardless");
-    Ok(())
+    ScreenShareProtectionStatus {
+        platform: "macos".into(),
+        status: "unverified".into(),
+        method: "NSWindow sharing exclusion request".into(),
+        message: "Ghostove requested the legacy macOS sharing exclusion. Modern screen-sharing behavior is not guaranteed.".into(),
+    }
 }
 
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-fn apply_screen_share_invisibility(_window: &WebviewWindow) -> Result<(), String> {
+fn apply_screen_share_invisibility(_window: &WebviewWindow) -> ScreenShareProtectionStatus {
     println!("[Ghostove Linux] Screen share exclusion stub.");
-    Ok(())
+    ScreenShareProtectionStatus {
+        platform: std::env::consts::OS.into(),
+        status: "unsupported".into(),
+        method: "none".into(),
+        message: "Ghostove does not currently provide native screen-share exclusion on this platform.".into(),
+    }
 }
 
 // -------------------------------------------------------------------
@@ -474,9 +532,8 @@ fn move_window_to_monitor(
 // -------------------------------------------------------------------
 
 #[tauri::command]
-fn enforce_screenshare_invisibility(window: WebviewWindow) -> Result<String, String> {
-    apply_screen_share_invisibility(&window)?;
-    Ok("Screen-share invisibility enforced successfully".into())
+fn enforce_screenshare_invisibility(window: WebviewWindow) -> ScreenShareProtectionStatus {
+    apply_screen_share_invisibility(&window)
 }
 
 #[tauri::command]
@@ -908,9 +965,8 @@ fn main() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_visible_on_all_workspaces(true);
-                if let Err(e) = apply_screen_share_invisibility(&window) {
-                    eprintln!("[Ghostove] Error applying screen-share invisibility: {}", e);
-                }
+                let protection = apply_screen_share_invisibility(&window);
+                println!("[Ghostove] Screen-share protection status: {:?}", protection);
 
                 // Ensure HUD is centered by default on launch
                 let cur_mon_idx = get_current_monitor_index(&window).unwrap_or(0);

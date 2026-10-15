@@ -25,6 +25,7 @@ interface UseRealAudioListenerProps {
   wsUrl?: string;
   sessionId?: string | null;
   initialSharedStream?: MediaStream | null;
+  autoAnswer?: boolean;
 }
 
 function formatCurrentTime(): string {
@@ -40,9 +41,11 @@ export function useRealAudioListener({
   wsUrl = WS_URL,
   sessionId,
   initialSharedStream,
+  autoAnswer = true,
 }: UseRealAudioListenerProps) {
   const [isMicActive, setIsMicActive] = useState(false);
   const [isSharedAudioActive, setIsSharedAudioActive] = useState(false);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
@@ -56,9 +59,6 @@ export function useRealAudioListener({
   const [sourceType, setSourceType] = useState<string>('');
   const [quotaExhausted, setQuotaExhausted] = useState<{ message: string } | null>(null);
   const [pauseStatus, setPauseStatus] = useState<'idle' | 'speaking' | 'pausing' | 'triggered'>('idle');
-
-  const speechDebounceTimerRef = useRef<any>(null);
-  const accumulatedFallbackChunksRef = useRef<string[]>([]);
 
   // Question & Answer History State for previous/next navigation
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
@@ -114,6 +114,7 @@ export function useRealAudioListener({
   const sharedProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const isMicActiveRef = useRef<boolean>(false);
   const isSharedAudioActiveRef = useRef<boolean>(false);
+  const autoAnswerRef = useRef<boolean>(autoAnswer);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -126,12 +127,41 @@ export function useRealAudioListener({
   const tokenFlushTimerRef = useRef<any>(null);
   const fullAnswerRef = useRef<string>('');
   const isGeneratingRef = useRef<boolean>(false);
+  const recentFinalTranscriptsRef = useRef<Array<{ text: string; speaker: string; origin: string; at: number }>>([]);
+
+  const appendFinalTranscript = useCallback((text: string, speaker: string, origin: 'browser' | 'backend') => {
+    const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    const now = Date.now();
+    const recent = recentFinalTranscriptsRef.current.filter((item) => now - item.at < 8000);
+    if (recent.some((item) => item.origin !== origin && item.speaker === speaker && item.text === normalized)) return;
+    recentFinalTranscriptsRef.current = [...recent, { text: normalized, speaker, origin, at: now }].slice(-30);
+    setTranscriptList((items) => [...items, {
+      id: now.toString() + Math.random().toString(36).slice(2, 5),
+      text: text.trim(),
+      isFinal: true,
+      speaker,
+      timestamp: formatCurrentTime(),
+    }]);
+  }, []);
+
+  useEffect(() => {
+    autoAnswerRef.current = autoAnswer;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'audio_source',
+        source: 'meeting_audio',
+        enabled: isSharedAudioActiveRef.current,
+        auto_answer: autoAnswer,
+      }));
+    }
+  }, [autoAnswer]);
 
   // Trigger question asking & answer generation from real backend AI
   const askQuestion = useCallback(
     (questionText: string, source: string = 'Audio') => {
       const trimmed = questionText.trim();
-      if (!trimmed) return;
+      const ws = wsRef.current;
+      if (!trimmed || !ws || ws.readyState !== WebSocket.OPEN) return false;
 
       if (tokenFlushTimerRef.current) {
         clearTimeout(tokenFlushTimerRef.current);
@@ -166,7 +196,6 @@ export function useRealAudioListener({
 
       // Send to WebSocket to trigger real backend LLM stream
       const sendPayload = () => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
         const recentHistory: { role: string; content: string }[] = [];
         const pastTurns = qaHistoryRef.current.slice(-4);
         for (const item of pastTurns) {
@@ -175,31 +204,18 @@ export function useRealAudioListener({
             recentHistory.push({ role: 'assistant', content: item.answer });
           }
         }
-        wsRef.current.send(
+        ws.send(
           JSON.stringify({
             type: 'ask_question',
             text: trimmed,
             history: recentHistory,
+            client_handled: true,
           })
         );
         return true;
       };
 
-      if (!sendPayload()) {
-        setFullAnswer('Connecting to backend AI streaming engine...');
-        let retries = 0;
-        const checkInterval = setInterval(() => {
-          retries++;
-          if (sendPayload()) {
-            clearInterval(checkInterval);
-            setFullAnswer('');
-          } else if (retries >= 25) {
-            clearInterval(checkInterval);
-            setFullAnswer('Failed to reach AI streaming engine. Please ensure the backend is running.');
-            setIsGenerating(false);
-          }
-        }, 200);
-      }
+      return sendPayload();
     },
     []
   );
@@ -269,11 +285,15 @@ export function useRealAudioListener({
 
   const clearTranscripts = useCallback(() => {
     setTranscriptList([]);
+    recentFinalTranscriptsRef.current = [];
     setInterimText('');
   }, []);
 
   // 4. Stop shared audio helper
   const stopSharedAudio = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'audio_source', source: 'meeting_audio', enabled: false, auto_answer: autoAnswerRef.current }));
+    }
     if (sharedProcessorRef.current) {
       try {
         sharedProcessorRef.current.disconnect();
@@ -362,6 +382,9 @@ export function useRealAudioListener({
 
       isSharedAudioActiveRef.current = true;
       setIsSharedAudioActive(true);
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'audio_source', source: 'meeting_audio', enabled: true, auto_answer: autoAnswerRef.current }));
+      }
       console.log('[RealAudio] Shared meeting audio attached on Channel 1 (Interviewer).');
     } catch (err) {
       console.warn('[RealAudio] Failed to attach shared audio stream:', err);
@@ -418,9 +441,8 @@ export function useRealAudioListener({
           const resampled = resampleTo16kHz(inputData, audioCtx.sampleRate);
           const pcmBuffer = floatTo16BitPCM(resampled);
 
-          // Solution 1 Channel Separation:
-          // If shared meeting audio is active, candidate mic is Channel 2 (Candidate).
-          // If shared audio is NOT active (single-source mic mode), mic is Channel 1 (Intent Guard protected).
+          // With meeting audio, the mic is the candidate channel. In mic-only
+          // mode it feeds interviewer detection so spoken questions auto-answer.
           const channelId = isSharedAudioActiveRef.current ? 2 : 1;
           const tagged = new Uint8Array(1 + pcmBuffer.byteLength);
           tagged[0] = channelId;
@@ -529,43 +551,10 @@ export function useRealAudioListener({
               if (res.isFinal) {
                 const trimmedText = text.trim();
                 if (trimmedText) {
-                  const time = formatCurrentTime();
-                  setTranscriptList((prev) => [
-                    ...prev,
-                    {
-                      id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
-                      text: trimmedText,
-                      isFinal: true,
-                      speaker: 'You',
-                      timestamp: time,
-                    },
-                  ]);
-                  setInterimText('');
-
-                  // Auto-detect question only as a fallback when backend WebSocket is disconnected
                   const isWsActive = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
                   if (!isWsActive) {
-                    accumulatedFallbackChunksRef.current.push(trimmedText);
-                    setPauseStatus('pausing');
-                    if (speechDebounceTimerRef.current) {
-                      clearTimeout(speechDebounceTimerRef.current);
-                    }
-                    speechDebounceTimerRef.current = setTimeout(() => {
-                      const fullQ = accumulatedFallbackChunksRef.current.join(' ').trim();
-                      accumulatedFallbackChunksRef.current = [];
-                      setPauseStatus('triggered');
-
-                      if (
-                        fullQ.endsWith('?') ||
-                        /^(can|could|how|what|why|tell|explain|describe|who|where|when|difference)/i.test(
-                          fullQ
-                        )
-                      ) {
-                        askQuestion(fullQ, 'Audio');
-                      } else {
-                        setPauseStatus('idle');
-                      }
-                    }, 2000);
+                    appendFinalTranscript(trimmedText, 'You', 'browser');
+                    setInterimText('');
                   }
                 }
               } else {
@@ -573,10 +562,7 @@ export function useRealAudioListener({
               }
             }
             if (interim) {
-              setPauseStatus('speaking');
-              if (speechDebounceTimerRef.current) {
-                clearTimeout(speechDebounceTimerRef.current);
-              }
+              if (wsRef.current?.readyState !== WebSocket.OPEN) setPauseStatus('speaking');
             }
             const isWsActive = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
             if (!isWsActive && interim) {
@@ -614,7 +600,7 @@ export function useRealAudioListener({
       isMicActiveRef.current = false;
       setIsMicActive(false);
     }
-  }, [selectedLanguage, askQuestion]);
+  }, [selectedLanguage, appendFinalTranscript]);
 
   // 7. Start shared audio helper (listen to meeting / computer sound)
   const startSharedAudio = useCallback(async () => {
@@ -783,6 +769,15 @@ export function useRealAudioListener({
 
         ws.onopen = () => {
           console.log('[RealAudio WS] Connected to backend websocket.');
+          setIsBackendConnected(true);
+          setInterimText('');
+          setPauseStatus('idle');
+          ws.send(JSON.stringify({
+            type: 'audio_source',
+            source: 'meeting_audio',
+            enabled: isSharedAudioActiveRef.current,
+            auto_answer: autoAnswerRef.current,
+          }));
         };
 
         ws.onmessage = (event) => {
@@ -791,18 +786,8 @@ export function useRealAudioListener({
             if (data.type === 'transcript') {
               const text = (data.text || '').trim();
               if (data.is_final && text) {
-                const time = formatCurrentTime();
                 const speaker = data.speaker || 'Interviewer';
-                setTranscriptList((prev) => [
-                  ...prev,
-                  {
-                    id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
-                    text,
-                    isFinal: true,
-                    speaker,
-                    timestamp: time,
-                  },
-                ]);
+                appendFinalTranscript(text, speaker, 'backend');
                 setInterimText('');
               } else if (!data.is_final && text) {
                 if (data.speaker !== 'You') {
@@ -950,7 +935,9 @@ export function useRealAudioListener({
         };
 
         ws.onclose = (event: CloseEvent) => {
+          if (wsRef.current !== ws) return;
           if (!isUnmounted) {
+            setIsBackendConnected(false);
             console.log(`[RealAudio WS] Disconnected (code: ${event.code}).`);
             // Do not reconnect automatically if blocked by security lock or quota
             if (event.code === 4001 || event.code === 4002 || event.code === 4003) {
@@ -963,7 +950,9 @@ export function useRealAudioListener({
         };
 
         ws.onerror = (err) => {
+          if (wsRef.current !== ws) return;
           console.warn('[RealAudio WS] WebSocket error:', err);
+          setIsBackendConnected(false);
         };
       } catch (e) {
         if (!isUnmounted) {
@@ -981,7 +970,7 @@ export function useRealAudioListener({
         wsRef.current.close();
       }
     };
-  }, [token, wsUrl, sessionId, selectedLanguage]);
+  }, [token, wsUrl, sessionId, selectedLanguage, appendFinalTranscript]);
 
   // 12. Auto-start real audio on mount
   useEffect(() => {
@@ -1018,6 +1007,7 @@ export function useRealAudioListener({
   return {
     isMicActive,
     isSharedAudioActive,
+    isBackendConnected,
     isSpeaking,
     volumeLevel,
     micError,

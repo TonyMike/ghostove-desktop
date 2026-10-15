@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="shell" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101713"/>
+      <stop offset="1" stop-color="#080D0A"/>
+    </linearGradient>
+    <linearGradient id="ghost" x1="20" y1="12" x2="44" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A7D2B3"/>
+      <stop offset=".42" stop-color="#55B978"/>
+      <stop offset="1" stop-color="#168B53"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(0 30 -30 0 32 28)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FB39C" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#8FB39C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#shell)" stroke="#536E5C" stroke-opacity=".72"/>
+  <circle cx="32" cy="29" r="26" fill="url(#glow)"/>
+  <path d="M32 12.5c-9.4 0-16.5 7.3-16.5 16.6v16.2c0 1.5 1.2 2.2 2.4 1.2l3.6-3 4.5 3.6c.9.7 2.1.7 3 0l3-2.4 3 2.4c.9.7 2.1.7 3 0l4.5-3.6 3.6 3c1.2 1 2.4.3 2.4-1.2V29.1c0-9.3-7.1-16.6-16.5-16.6Z" fill="url(#ghost)"/>
+  <path d="M17 28.5c.2-8.1 6.6-14.3 15-14.3s14.8 6.2 15 14.3c-2.4-6-8-9.7-15-9.7s-12.6 3.7-15 9.7Z" fill="#E7F7EB" fill-opacity=".27"/>
+  <ellipse cx="26" cy="29" rx="2.25" ry="2.8" fill="#07110B"/>
+  <ellipse cx="38" cy="29" rx="2.25" ry="2.8" fill="#07110B"/>
+  <circle cx="26.7" cy="28.2" r=".62" fill="#E7F7EB"/>
+  <circle cx="38.7" cy="28.2" r=".62" fill="#E7F7EB"/>
+</svg>

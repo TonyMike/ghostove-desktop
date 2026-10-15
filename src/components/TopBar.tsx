@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Ghost,
   Move,
   Minimize2,
   Maximize2,
@@ -61,9 +60,11 @@ export function TopBar({
     >
       {/* Brand: Logo + Ghostove Stealth HUD */}
       <div className="flex items-center gap-2 pointer-events-none">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500/25 to-teal-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold shadow-sm shadow-emerald-500/20">
-          <Ghost className="w-3.5 h-3.5" />
-        </div>
+        <img
+          src="/ghostove-icon.svg"
+          alt=""
+          className="h-6 w-6 rounded-lg object-contain shadow-sm shadow-emerald-500/20"
+        />
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-xs text-white tracking-tight">
             Ghostove

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Info,
-  AlertTriangle,
   Video,
   Upload,
   Play,
@@ -16,7 +14,8 @@ import {
 import { openBrowserUrl } from '../utils/browser';
 import { SessionItem } from './SessionSelectScreen';
 import { AudioPermissionModal } from './AudioPermissionModal';
-import { checkSystemPermissions, SystemPermissions } from '../utils/windowManager';
+import { checkSystemPermissions } from '../utils/windowManager';
+import type { SystemPermissions } from '../utils/windowManager';
 
 interface ConnectSessionScreenProps {
   session?: SessionItem | null;
@@ -189,13 +188,13 @@ export function ConnectSessionScreen({
           </div>
         </div>
 
-        {/* Card 1: Zoom Invisibility Advisory */}
+        {/* Card 1: Screen-share protection */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 flex gap-2.5 text-left">
           <div className="shrink-0 mt-0.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-[11px] leading-relaxed text-slate-400">
-            Ghostove utilizes OS display exclusion hooks (`WDA_EXCLUDEFROMCAPTURE`). Your HUD will never register on Zoom, Meet, or Teams screen recordings.
+            Ghostove uses OS display-exclusion APIs to keep the copilot window out of Zoom, Microsoft Teams, and Google Meet screen recordings.
           </div>
         </div>
 

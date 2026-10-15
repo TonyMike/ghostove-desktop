@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { resizeWindow, startDragging } from '../utils/windowManager';
 import { WEB_API_URL, BACKEND_API_URL } from '../utils/config';
+import { EndSessionDialog } from './common/EndSessionDialog';
 
 interface MockInterviewHUDProps {
   token: string;
@@ -75,6 +76,7 @@ export function MockInterviewHUD({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSpeakingQuestion, setIsSpeakingQuestion] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const mockStartTimeRef = useRef<number>(Date.now());
@@ -332,30 +334,30 @@ export function MockInterviewHUD({
         });
       }
 
+      const formattedTranscript = items
+        .map(
+          (i) =>
+            `Interviewer: ${i.question}\nCandidate: ${i.answer}${
+              i.feedback ? `\n[Feedback - Score ${i.score || 'N/A'}/100]: ${i.feedback}` : ''
+            }`
+        )
+        .join('\n\n');
+      const durationSeconds = Math.max(1, Math.round((Date.now() - mockStartTimeRef.current) / 1000));
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          status: 'completed',
+          duration_seconds: durationSeconds,
+          transcript: formattedTranscript,
+        }),
+      }).catch(() => {});
+
       if (items.length > 0) {
-        const formattedTranscript = items
-          .map(
-            (i) =>
-              `Interviewer: ${i.question}\nCandidate: ${i.answer}${
-                i.feedback ? `\n[Feedback - Score ${i.score || 'N/A'}/100]: ${i.feedback}` : ''
-              }`
-          )
-          .join('\n\n');
-        const durationSeconds = Math.max(1, Math.round((Date.now() - mockStartTimeRef.current) / 1000));
-
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify({
-            status: 'completed',
-            duration_seconds: durationSeconds,
-            transcript: formattedTranscript,
-          }),
-        }).catch(() => {});
-
         fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
           method: 'POST',
           headers,
@@ -367,6 +369,12 @@ export function MockInterviewHUD({
     resizeWindow(440, 600);
     if (onBackToMenu) onBackToMenu();
   }, [sessionId, token, candidateResponse, questions, currentIndex, evaluation, onBackToMenu]);
+
+  const cancelEndSession = useCallback(() => setShowEndSessionDialog(false), []);
+  const confirmEndSession = useCallback(() => {
+    setShowEndSessionDialog(false);
+    handleExitPractice();
+  }, [handleExitPractice]);
 
   // Reveal exemplary 10/10 ideal STAR response
   const handleRevealIdeal = async () => {
@@ -465,6 +473,11 @@ export function MockInterviewHUD({
 
   return (
     <div className="w-full h-full p-3 flex flex-col items-center justify-start select-none relative font-sans transition-all duration-200 overflow-x-hidden overflow-y-auto bg-slate-950/95 text-white">
+      <EndSessionDialog
+        isOpen={showEndSessionDialog}
+        onCancel={cancelEndSession}
+        onConfirm={confirmEndSession}
+      />
       {/* 1. Header Bar with Drag Handle & Navigation */}
       <div
         data-tauri-drag-region
@@ -526,7 +539,7 @@ export function MockInterviewHUD({
           {/* Back to Sessions */}
           {onBackToMenu && (
             <button
-              onClick={handleExitPractice}
+              onClick={() => setShowEndSessionDialog(true)}
               className="px-3 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <LogOut className="w-3 h-3 text-rose-400" />

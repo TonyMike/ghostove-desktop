@@ -1,117 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
   <defs>
-    <!-- Background Squircle Gradient (Rich Deep Obsidian / Cyber Slate) -->
-    <radialGradient id="bgGrad" cx="50%" cy="35%" r="70%">
-      <stop offset="0%" stop-color="#0d1527"/>
-      <stop offset="55%" stop-color="#080d19"/>
-      <stop offset="100%" stop-color="#020409"/>
+    <linearGradient id="shell" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101713"/>
+      <stop offset="1" stop-color="#080D0A"/>
+    </linearGradient>
+    <linearGradient id="ghost" x1="20" y1="12" x2="44" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A7D2B3"/>
+      <stop offset=".42" stop-color="#55B978"/>
+      <stop offset="1" stop-color="#168B53"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(0 30 -30 0 32 28)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FB39C" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#8FB39C" stop-opacity="0"/>
     </radialGradient>
-
-    <!-- Beveled Squircle Border -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34d399" stop-opacity="0.6"/>
-      <stop offset="30%" stop-color="#1e293b" stop-opacity="0.8"/>
-      <stop offset="70%" stop-color="#0f172a" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0.4"/>
-    </linearGradient>
-
-    <!-- Radial Emerald Ambient Aura Bloom behind Ghost -->
-    <radialGradient id="auraBloom" cx="50%" cy="44%" r="48%">
-      <stop offset="0%" stop-color="#10b981" stop-opacity="0.38"/>
-      <stop offset="35%" stop-color="#059669" stop-opacity="0.20"/>
-      <stop offset="70%" stop-color="#0d9488" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#020617" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Ghost Body Gradient: Electric Mint to Vivid Emerald to Deep Cyber Teal -->
-    <linearGradient id="ghostFill" x1="15%" y1="0%" x2="85%" y2="100%">
-      <stop offset="0%" stop-color="#a7f3d0"/>
-      <stop offset="20%" stop-color="#34d399"/>
-      <stop offset="65%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#047857"/>
-    </linearGradient>
-
-    <!-- Head Specular Highlight Arc -->
-    <linearGradient id="specularArc" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-
-    <!-- Deep Eyes Gradient -->
-    <linearGradient id="eyeFill" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#01040a"/>
-      <stop offset="100%" stop-color="#060d1a"/>
-    </linearGradient>
-
-    <!-- Ghost Drop Shadow & Neon Glow -->
-    <filter id="ghostAura" x="-25%" y="-25%" width="150%" height="150%">
-      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#10b981" flood-opacity="0.45"/>
-      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#010409" flood-opacity="0.7"/>
-    </filter>
-
-    <filter id="squircleShadow" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="28" stdDeviation="36" flood-color="#000000" flood-opacity="0.8"/>
-    </filter>
   </defs>
-
-  <!-- macOS App Icon Standard Squircle -->
-  <g filter="url(#squircleShadow)">
-    <rect x="70" y="70" width="884" height="884" rx="208" ry="208" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="4"/>
-  </g>
-
-  <!-- Ambient Neon Backlight -->
-  <circle cx="512" cy="470" r="380" fill="url(#auraBloom)"/>
-
-  <!-- Ghost Entity -->
-  <g filter="url(#ghostAura)">
-    <!-- Smooth curved Ghost silhouette with rounded bottom waves -->
-    <!-- Head radius = 230px, centered at (512, 430). Top at Y = 200, bottom ripples at Y = 740 -->
-    <path
-      d="M 512 195
-         C 380 195, 276 299, 276 430
-         L 276 720
-         C 276 732, 288 740, 298 733
-         L 362 682
-         C 370 676, 382 676, 390 682
-         L 446 728
-         C 454 735, 466 735, 474 728
-         L 512 696
-         L 550 728
-         C 558 735, 570 735, 578 728
-         L 634 682
-         C 642 676, 654 676, 662 682
-         L 726 733
-         C 736 740, 748 732, 748 720
-         L 748 430
-         C 748 299, 644 195, 512 195
-         Z"
-      fill="url(#ghostFill)"
-    />
-
-    <!-- Head Highlight Glass Bevel -->
-    <path
-      d="M 512 201
-         C 386 201, 284 303, 282 430
-         C 304 316, 398 230, 512 230
-         C 626 230, 720 316, 742 430
-         C 740 303, 638 201, 512 201
-         Z"
-      fill="url(#specularArc)"
-    />
-  </g>
-
-  <!-- Ghost Eyes: Minimalist, stealth, crisp and friendly -->
-  <g>
-    <!-- Left Eye -->
-    <ellipse cx="422" cy="425" rx="26" ry="32" fill="url(#eyeFill)"/>
-    <ellipse cx="422" cy="425" rx="26" ry="32" fill="none" stroke="#064e3b" stroke-width="1.5"/>
-    <circle cx="430" cy="415" r="7.5" fill="#ffffff" fill-opacity="0.95"/>
-    <circle cx="417" cy="433" r="3.5" fill="#a7f3d0" fill-opacity="0.75"/>
-
-    <!-- Right Eye -->
-    <ellipse cx="602" cy="425" rx="26" ry="32" fill="url(#eyeFill)"/>
-    <ellipse cx="602" cy="425" rx="26" ry="32" fill="none" stroke="#064e3b" stroke-width="1.5"/>
-    <circle cx="610" cy="415" r="7.5" fill="#ffffff" fill-opacity="0.95"/>
-    <circle cx="597" cy="433" r="3.5" fill="#a7f3d0" fill-opacity="0.75"/>
-  </g>
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#shell)" stroke="#536E5C" stroke-opacity=".72"/>
+  <circle cx="32" cy="29" r="26" fill="url(#glow)"/>
+  <path d="M32 12.5c-9.4 0-16.5 7.3-16.5 16.6v16.2c0 1.5 1.2 2.2 2.4 1.2l3.6-3 4.5 3.6c.9.7 2.1.7 3 0l3-2.4 3 2.4c.9.7 2.1.7 3 0l4.5-3.6 3.6 3c1.2 1 2.4.3 2.4-1.2V29.1c0-9.3-7.1-16.6-16.5-16.6Z" fill="url(#ghost)"/>
+  <path d="M17 28.5c.2-8.1 6.6-14.3 15-14.3s14.8 6.2 15 14.3c-2.4-6-8-9.7-15-9.7s-12.6 3.7-15 9.7Z" fill="#E7F7EB" fill-opacity=".27"/>
+  <ellipse cx="26" cy="29" rx="2.25" ry="2.8" fill="#07110B"/>
+  <ellipse cx="38" cy="29" rx="2.25" ry="2.8" fill="#07110B"/>
+  <circle cx="26.7" cy="28.2" r=".62" fill="#E7F7EB"/>
+  <circle cx="38.7" cy="28.2" r=".62" fill="#E7F7EB"/>
 </svg>

@@ -9,7 +9,11 @@ import { MockInterviewHUD } from './components/MockInterviewHUD';
 import { PlanRequiredScreen } from './components/PlanRequiredScreen';
 import { ScreenPositionPopover } from './components/ScreenPositionPopover';
 import { getStoredToken, setStoredToken, clearStoredToken } from './utils/store';
-import { moveToCursorScreen, resizeWindow } from './utils/windowManager';
+import {
+  enforceScreenShareProtection,
+  moveToCursorScreen,
+  resizeWindow,
+} from './utils/windowManager';
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
 import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
@@ -31,18 +35,17 @@ export default function App() {
     setSessionRefreshTrigger((prev) => prev + 1);
   }, []);
 
-  // Enforce screen-share invisibility on launch
+  // Request and report best-effort OS screen-share protection on launch.
   useEffect(() => {
-    async function applyInvisibility() {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('enforce_screenshare_invisibility');
-        console.log('[Ghostove Desktop] Enforced OS screen-share invisibility.');
-      } catch (e) {
-        console.warn('[Ghostove Desktop] Enforce invisibility stub:', e);
-      }
+    let isMounted = true;
+    async function applyScreenShareProtection() {
+      const status = await enforceScreenShareProtection();
+      if (isMounted) console.info('[Ghostove Desktop] Screen-share protection:', status);
     }
-    applyInvisibility();
+    void applyScreenShareProtection();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Global hotkey: Cmd+Shift+S (or Ctrl+Shift+S) to instantly switch panel to cursor screen
@@ -280,7 +283,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="w-full h-full bg-[#f8f9fa] dark:bg-slate-950 text-slate-500 flex items-center justify-center text-xs select-none">
+      <div className="w-full h-full bg-[#f4f4f0] dark:bg-slate-950 text-slate-500 flex items-center justify-center text-xs select-none">
         Initializing Ghostove Stealth Engine...
       </div>
     );
@@ -289,7 +292,7 @@ export default function App() {
   // Screen 1: Unauthenticated
   if (!token) {
     return (
-      <div className="w-full h-full select-none relative bg-[#f8f9fa] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
+      <div className="w-full h-full select-none relative bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
         <AuthScreen
           onOpenScreenPosition={() => setShowScreenPosition(true)}
         />
@@ -336,7 +339,7 @@ export default function App() {
         )}
         {showScreenPosition && (
           <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center">
-            <div className="relative w-[440px] h-[600px] bg-[#f8f9fa] dark:bg-slate-900 overflow-hidden">
+            <div className="relative w-[440px] h-[600px] bg-[#f4f4f0] dark:bg-slate-900 overflow-hidden">
               <ScreenPositionPopover
                 isOpen={showScreenPosition}
                 onClose={() => setShowScreenPosition(false)}
@@ -350,7 +353,7 @@ export default function App() {
 
   // Screen 3 & 4: Session List View or Connect Call Session View (Main setup panel)
   return (
-    <div className="w-full h-full relative select-none bg-[#f8f9fa] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
+    <div className="w-full h-full relative select-none bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
       {/* TopBar */}
       <TopBar
         isCollapsed={isCollapsed}
@@ -384,8 +387,10 @@ export default function App() {
           session={selectedSession}
           hasAccess={isPaid}
           onUpgradeRequired={() => setView('plan-required')}
-          onConnect={(stream) => {
+          onConnect={async (stream) => {
             console.log('[Ghostove Desktop] Connecting call session with stream:', stream);
+            const protection = await enforceScreenShareProtection();
+            console.info('[Ghostove Desktop] Screen-share protection:', protection);
             setSharedAudioStream(stream || null);
             setView('active-session');
           }}

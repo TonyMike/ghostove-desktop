@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ghost, ExternalLink, ShieldCheck, Loader2, Sparkles } from 'lucide-react';
+import { ExternalLink, ShieldCheck, Loader2 } from 'lucide-react';
 import { TopBar } from './TopBar';
 import { WEB_API_URL } from '../utils/config';
 
@@ -37,9 +37,11 @@ export function AuthScreen({
       <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
         <div className="max-w-sm w-full space-y-6 text-center">
           {/* Logo Badge */}
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-400 shadow-lg shadow-emerald-500/10">
-            <Ghost className="w-7 h-7" />
-          </div>
+          <img
+            src="/ghostove-icon.svg"
+            alt="Ghostove"
+            className="mx-auto h-14 w-14 rounded-2xl shadow-lg shadow-emerald-500/10"
+          />
 
           <div>
             <h1 className="text-xl font-extrabold text-white tracking-tight">

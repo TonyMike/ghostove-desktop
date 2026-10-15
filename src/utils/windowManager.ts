@@ -148,6 +148,32 @@ export interface SystemPermissions {
   screen_capture: boolean;
 }
 
+export interface ScreenShareProtectionStatus {
+  platform: string;
+  status: 'applied' | 'unverified' | 'unsupported' | 'failed';
+  method: string;
+  message: string;
+}
+
+export async function enforceScreenShareProtection(): Promise<ScreenShareProtectionStatus> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    return {
+      platform: 'browser',
+      status: 'unsupported',
+      method: 'none',
+      message: 'Native screen-share protection is only available in the Ghostove desktop app.',
+    };
+  }
+
+  const native = await safeInvoke<ScreenShareProtectionStatus>('enforce_screenshare_invisibility');
+  return native ?? {
+    platform: 'unknown',
+    status: 'failed',
+    method: 'Tauri screen-share protection command',
+    message: 'Ghostove could not read the operating-system capture-exclusion status.',
+  };
+}
+
 export async function checkSystemPermissions(): Promise<SystemPermissions> {
   // 1. Check native macOS / Windows permissions via Tauri IPC
   const native = await safeInvoke<SystemPermissions>('check_system_permissions');
