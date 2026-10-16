@@ -133,8 +133,9 @@ export async function startDragging(): Promise<void> {
   }
 }
 
-export async function captureScreen(): Promise<string | null> {
-  return await safeInvoke<string>('capture_screen');
+export async function captureScreen(): Promise<string> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return await invoke<string>('capture_screen');
 }
 
 /**

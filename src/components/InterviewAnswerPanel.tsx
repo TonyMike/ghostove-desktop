@@ -480,11 +480,11 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold text-white/70 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="text-base select-none leading-none">
-                  {question.includes('Coding') || question.includes('Screen') ? '💻' : '💬'}
+                  {question.includes('Screen') ? '🖼️' : '💬'}
                 </span>
                 <span>
-                  {question.includes('Coding') || question.includes('Screen')
-                    ? 'Screen Coding Problem'
+                  {question.includes('Screen')
+                    ? 'Screen Question or Issue'
                     : 'Question'}
                 </span>
               </span>
@@ -548,7 +548,7 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
           <div className="h-40 flex flex-col items-center justify-center text-center p-4 text-slate-500 space-y-2 select-none">
             <Sparkles className="w-6 h-6 text-amber-400/40" />
             <p className="text-xs max-w-xs">
-              When an interviewer asks a question or you click Screenshot/Chat, structured STAR talking points will appear here instantly.
+              When an interviewer asks a question or you click Screenshot/Chat, a relevant answer will appear here.
             </p>
           </div>
         )}

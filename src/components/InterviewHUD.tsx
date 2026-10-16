@@ -127,7 +127,7 @@ export function InterviewHUD({
     streamingToken,
     sourceType,
     askQuestion,
-    solveCodingScreen,
+    analyzeScreenshot,
     clearAnswer,
     clearTranscripts,
     qaHistory,
@@ -170,14 +170,12 @@ export function InterviewHUD({
 
   const handleScreenshot = useCallback(async () => {
     setShowAnswer(true);
-    showToast("📸 Capturing screen & analyzing coding problem...");
-    const ok = await solveCodingScreen(selectedLanguage || "Python");
+    showToast("📸 Capturing screen and checking for a question or issue...");
+    const ok = await analyzeScreenshot(selectedLanguage || "Python");
     if (!ok) {
-      showToast(
-        "⚠️ Screen capture failed. Check macOS screen recording permissions.",
-      );
+      showToast("⚠️ Screenshot could not be analyzed. See the answer panel for details.");
     }
-  }, [solveCodingScreen, selectedLanguage, showToast]);
+  }, [analyzeScreenshot, selectedLanguage, showToast]);
 
   const sessionStartTimeRef = useRef<number>(Date.now());
 

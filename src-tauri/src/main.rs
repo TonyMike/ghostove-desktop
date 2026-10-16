@@ -236,6 +236,80 @@ fn apply_screen_share_invisibility(_window: &WebviewWindow) -> ScreenShareProtec
     }
 }
 
+#[cfg(target_os = "macos")]
+fn ensure_visible_on_all_spaces(window: &WebviewWindow) {
+    use macos_types::*;
+
+    let _ = window.set_visible_on_all_workspaces(true);
+    if let Ok(ns_window_ptr) = window.ns_window() {
+        let ns_window = ns_window_ptr as Id;
+        let behavior = NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES
+            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+            | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE;
+        unsafe {
+            let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn follow_active_virtual_desktop(hwnd_value: usize, auto_follow: Arc<AtomicBool>) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::UI::Shell::{IVirtualDesktopManager, VirtualDesktopManager};
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
+    std::thread::spawn(move || {
+        let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok();
+        if initialized.is_err() {
+            eprintln!("[Ghostove Windows] Could not initialize virtual desktop tracking.");
+            return;
+        }
+
+        let desktop_manager: IVirtualDesktopManager = match unsafe {
+            CoCreateInstance(&VirtualDesktopManager, None, CLSCTX_INPROC_SERVER)
+        } {
+            Ok(manager) => manager,
+            Err(error) => {
+                eprintln!("[Ghostove Windows] Could not create virtual desktop manager: {error}");
+                return;
+            }
+        };
+
+        let ghostove_window = HWND(hwnd_value as _);
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if !auto_follow.load(Ordering::SeqCst) {
+                continue;
+            }
+
+            let foreground = unsafe { GetForegroundWindow() };
+            if foreground.0.is_null() || foreground == ghostove_window {
+                continue;
+            }
+
+            let on_active_desktop =
+                unsafe { desktop_manager.IsWindowOnCurrentVirtualDesktop(ghostove_window) };
+            if matches!(on_active_desktop, Ok(value) if value.0 != 0) {
+                continue;
+            }
+
+            if let Ok(active_desktop_id) = unsafe { desktop_manager.GetWindowDesktopId(foreground) }
+            {
+                if let Err(error) = unsafe {
+                    desktop_manager.MoveWindowToDesktop(ghostove_window, &active_desktop_id)
+                } {
+                    eprintln!(
+                        "[Ghostove Windows] Could not follow the active virtual desktop: {error}"
+                    );
+                }
+            }
+        }
+    });
+}
+
 // -------------------------------------------------------------------
 // Monitor & Window Position Data Structures
 // -------------------------------------------------------------------
@@ -871,9 +945,46 @@ fn capture_screen() -> Result<String, String> {
         let b64 = general_purpose::STANDARD.encode(&bytes);
         Ok(b64)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        Err("Native screen capture only supported on macOS".into())
+        use base64::{engine::general_purpose, Engine as _};
+        use std::{process::Command, time::{SystemTime, UNIX_EPOCH}};
+
+        // Windows desktop apps do not use macOS Screen Recording permissions.
+        // Capture the virtual desktop through System.Drawing and return JPEG,
+        // which is the format the backend's vision providers expect.
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| format!("Could not create screenshot filename: {error}"))?
+            .as_nanos();
+        let screenshot_path = std::env::temp_dir().join(format!(
+            "ghostove_screencap_{}_{}.jpg",
+            std::process::id(),
+            unique
+        ));
+        let escaped_path = screenshot_path.to_string_lossy().replace('\'', "''");
+        let script = format!(
+            "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height); $graphics = [System.Drawing.Graphics]::FromImage($bitmap); try {{ $graphics.CopyFromScreen($bounds.Left, $bounds.Top, 0, 0, $bitmap.Size); $bitmap.Save('{}', [System.Drawing.Imaging.ImageFormat]::Jpeg) }} finally {{ $graphics.Dispose(); $bitmap.Dispose() }}",
+            escaped_path
+        );
+
+        let output = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .output()
+            .map_err(|error| format!("Could not start Windows screen capture: {error}"))?;
+        if !output.status.success() {
+            let _ = std::fs::remove_file(&screenshot_path);
+            return Err("Windows screen capture failed".into());
+        }
+
+        let bytes = std::fs::read(&screenshot_path)
+            .map_err(|error| format!("Could not read Windows screenshot: {error}"))?;
+        let _ = std::fs::remove_file(&screenshot_path);
+        Ok(general_purpose::STANDARD.encode(&bytes))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err("Screen capture is not supported on this platform".into())
     }
 }
 
@@ -973,16 +1084,24 @@ fn main() {
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             if let Some(window) = app.get_webview_window("main") {
+                let screen_state = app.state::<ScreenStateManager>();
                 let _ = window.set_visible_on_all_workspaces(true);
                 let protection = apply_screen_share_invisibility(&window);
                 println!("[Ghostove] Screen-share protection status: {:?}", protection);
+
+                #[cfg(target_os = "windows")]
+                if let Ok(hwnd) = window.hwnd() {
+                    follow_active_virtual_desktop(
+                        hwnd.0 as usize,
+                        Arc::clone(&screen_state.auto_follow),
+                    );
+                }
 
                 // Ensure HUD is centered by default on launch
                 let cur_mon_idx = get_current_monitor_index(&window).unwrap_or(0);
                 let _ = move_window_to_monitor(&window, cur_mon_idx, "center");
 
                 // Spawn background monitor watcher for multi-screen auto-follow
-                let screen_state = app.state::<ScreenStateManager>();
                 let auto_follow = Arc::clone(&screen_state.auto_follow);
                 let dock_pos = Arc::clone(&screen_state.current_dock_position);
                 let win_clone = window.clone();
@@ -990,9 +1109,19 @@ fn main() {
                 std::thread::spawn(move || {
                     let mut candidate_monitor: Option<usize> = None;
                     let mut consecutive_ticks: u32 = 0;
+                    let mut last_workspace_refresh = std::time::Instant::now();
 
                     loop {
                         std::thread::sleep(std::time::Duration::from_millis(250));
+
+                        #[cfg(target_os = "macos")]
+                        if last_workspace_refresh.elapsed() >= std::time::Duration::from_secs(2) {
+                            let window = win_clone.clone();
+                            let _ = win_clone.run_on_main_thread(move || {
+                                ensure_visible_on_all_spaces(&window);
+                            });
+                            last_workspace_refresh = std::time::Instant::now();
+                        }
 
                         if !auto_follow.load(Ordering::SeqCst) {
                             continue;

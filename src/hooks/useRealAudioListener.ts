@@ -220,8 +220,8 @@ export function useRealAudioListener({
     []
   );
 
-  // Trigger screen capture and multimodal coding problem solver
-  const solveCodingScreen = useCallback(
+  // Capture the screen and answer its most relevant visible question or issue.
+  const analyzeScreenshot = useCallback(
     async (targetLanguage: string = 'Python', customBase64?: string): Promise<boolean> => {
       try {
         let imageB64 = customBase64;
@@ -231,6 +231,8 @@ export function useRealAudioListener({
 
         if (!imageB64) {
           console.warn('[RealAudio] captureScreen returned null or empty.');
+          setFullAnswer('The operating system returned an empty screenshot. Check screen-capture access and try again.');
+          setIsGenerating(false);
           return false;
         }
 
@@ -241,8 +243,8 @@ export function useRealAudioListener({
 
         const time = formatCurrentTime();
         setIsGenerating(true);
-        setCurrentQuestion(`💻 Reading coding problem from screen...`);
-        setFullAnswer('Analyzing coding problem with Vision AI & drafting optimal solution...');
+        setCurrentQuestion('🖼️ Reviewing screenshot...');
+        setFullAnswer('Inspecting the screen and preparing a relevant response...');
         setStreamingToken(null);
         setSourceType(`Screen ${time}`);
 
@@ -261,8 +263,9 @@ export function useRealAudioListener({
           return false;
         }
       } catch (err) {
-        console.error('[RealAudio] Error in solveCodingScreen:', err);
-        setFullAnswer('Screen capture failed. Please verify screen recording permissions in macOS System Settings.');
+        console.error('[RealAudio] Error in analyzeScreenshot:', err);
+        const details = err instanceof Error ? err.message : String(err);
+        setFullAnswer(`Screen capture failed: ${details}`);
         setIsGenerating(false);
         return false;
       }
@@ -1024,9 +1027,10 @@ export function useRealAudioListener({
     streamingToken,
     sourceType,
     askQuestion,
-    solveCodingScreen,
-    take_screenshot_of_code: solveCodingScreen,
-    takeScreenshotOfCode: solveCodingScreen,
+    analyzeScreenshot,
+    solveCodingScreen: analyzeScreenshot,
+    take_screenshot_of_code: analyzeScreenshot,
+    takeScreenshotOfCode: analyzeScreenshot,
     clearAnswer,
     clearTranscripts,
     setCurrentQuestion,
