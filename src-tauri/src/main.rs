@@ -927,6 +927,15 @@ fn check_system_permissions() -> Result<SystemPermissions, String> {
 
 fn main() {
     tauri::Builder::default()
+        // Keep protocol callbacks in the running app instead of opening a second
+        // window/process when Windows launches a custom-scheme URL.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())

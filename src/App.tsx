@@ -194,7 +194,7 @@ export default function App() {
       }
 
       setView('connect-session');
-    } else if (payload.action === 'open' || payload.action === 'refresh') {
+    } else if (payload.action === 'auth' || payload.action === 'open' || payload.action === 'refresh') {
       setView('session-select');
     }
   }, [checkUserAccess, token, triggerSessionRefresh]);
