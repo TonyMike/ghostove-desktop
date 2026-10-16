@@ -12,6 +12,10 @@ jobs:
   release:
     permissions:
       contents: write
+    env:
+      VITE_BACKEND_API_URL: ${{ vars.VITE_BACKEND_API_URL }}
+      VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+      VITE_WEB_API_URL: ${{ vars.VITE_WEB_API_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -71,11 +75,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Validate production environment
+        shell: bash
+        run: |
+          test -n "$VITE_BACKEND_API_URL" || { echo "::error::Missing Actions variable VITE_BACKEND_API_URL"; exit 1; }
+          test -n "$VITE_WS_URL" || { echo "::error::Missing Actions variable VITE_WS_URL"; exit 1; }
+          test -n "$VITE_WEB_API_URL" || { echo "::error::Missing Actions variable VITE_WEB_API_URL"; exit 1; }
+
       - name: Build and Publish Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_WEB_API_URL: ${{ vars.VITE_WEB_API_URL }}
         with:
           tagName: v${{ steps.versioning.outputs.version }}
           releaseName: 'Ghostove Desktop v${{ steps.versioning.outputs.version }}'
