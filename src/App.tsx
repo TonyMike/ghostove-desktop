@@ -178,7 +178,7 @@ export default function App() {
         // Fetch session details from cloud web API
         try {
           const authHeaders = (payload.token || token) ? { Authorization: `Bearer ${payload.token || token}` } : undefined;
-          const res = await fetch(`${WEB_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
+          const res = await fetch(`${BACKEND_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
           if (res.ok) {
             const data = await res.json();
             sessionData = data.session || data;

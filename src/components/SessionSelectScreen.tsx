@@ -15,7 +15,8 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { openBrowserUrl } from '../utils/browser';
-import { WEB_API_URL } from '../utils/config';
+import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
+import { getStoredToken } from '../utils/store';
 import { CreateSessionModal } from './CreateSessionModal';
 
 export interface SessionItem {
@@ -48,6 +49,8 @@ export function SessionSelectScreen({
 }: SessionSelectScreenProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -73,13 +76,25 @@ export function SessionSelectScreen({
 
       let rawSessions: any[] = [];
       try {
-        const resWeb = await fetch(`${WEB_API_URL}/api/sessions`, { headers });
+        const resWeb = await fetch(`${BACKEND_API_URL}/api/sessions?uncompleted_only=true`, {
+          headers,
+          cache: 'no-store',
+        });
         if (resWeb.ok) {
           const dataWeb = await resWeb.json();
           rawSessions = dataWeb.sessions || [];
+          setLoadError(null);
+        } else {
+          console.warn('[SessionSelect] Session API returned:', resWeb.status);
+          setLoadError(
+            resWeb.status === 401 || resWeb.status === 403
+              ? 'Your desktop connection needs to be refreshed. Pair the app with your web account again.'
+              : 'Could not sync sessions from Ghostove Backend. Check your connection and try again.'
+          );
         }
       } catch (err) {
         console.warn('[SessionSelect] Error fetching sessions from web API:', err);
+        setLoadError('Could not reach Ghostove Backend. Check your connection and try again.');
       }
 
       // Filter out completed sessions - completed sessions cannot be retaken in desktop HUD
@@ -108,6 +123,7 @@ export function SessionSelectScreen({
 
       setSessions(apiSessions);
     } catch {
+      setLoadError('Could not sync sessions from Ghostove Backend. Check your connection and try again.');
       if (!silent) setSessions([]);
     } finally {
       setLoading(false);
@@ -249,16 +265,25 @@ export function SessionSelectScreen({
 
   const handleDeleteSession = async (sessionId: string) => {
     try {
+      setActionError(null);
+      const activeToken = token || (await getStoredToken());
       const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (activeToken) {
+        headers['Authorization'] = `Bearer ${activeToken}`;
       }
-      // Delete session via cloud web API
-      await fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, { method: 'DELETE', headers }).catch(() => {});
-    } catch {
-      // ignore
+      const response = await fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail || `Backend returned ${response.status}`);
+      }
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (error) {
+      console.error('[SessionSelect] Could not delete session:', error);
+      setActionError(error instanceof Error ? error.message : 'Could not delete this session. Check your connection and try again.');
     }
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     setActiveMenuSessionId(null);
   };
 
@@ -335,6 +360,11 @@ export function SessionSelectScreen({
         onMouseUp={handleMouseUp}
         className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 relative"
       >
+        {actionError && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
+            {actionError}
+          </div>
+        )}
         {/* Pull-down indicator */}
         {(pullDistance > 0 || (isRefreshing && !loading)) && (
           <div
@@ -364,10 +394,27 @@ export function SessionSelectScreen({
           </div>
         ) : sortedSessions.length === 0 ? (
           <div className="py-12 text-center text-slate-400 text-xs space-y-2 border border-dashed border-slate-800 rounded-2xl p-6 bg-slate-900/20">
-            <p className="text-slate-300 font-medium">No pending interview dossiers found.</p>
-            <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-              Completed sessions can be reviewed with transcripts and AI notes on your Web Dashboard.
-            </p>
+            {loadError ? (
+              <>
+                <p className="text-amber-300 font-medium">Session sync needs attention.</p>
+                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={() => loadSessions(false)}
+                  disabled={isRefreshing}
+                  className="mt-2 rounded-full border border-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200 hover:border-emerald-500/50 disabled:opacity-50"
+                >
+                  Try again
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-300 font-medium">No pending interview dossiers found.</p>
+                <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                  Completed sessions can be reviewed with transcripts and AI notes on your Web Dashboard.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           sortedSessions.map((sess) => (

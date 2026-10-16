@@ -347,18 +347,20 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
-        method: 'PATCH',
+      fetch(`${BACKEND_API_URL}/api/sessions/save`, {
+        method: 'POST',
         headers,
         body: JSON.stringify({
+          session_id: sessionId,
           status: 'completed',
           duration_seconds: durationSeconds,
           transcript: formattedTranscript,
+          mode: 'mock',
         }),
       }).catch(() => {});
 
       if (items.length > 0) {
-        fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
+        fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ action: 'generate_notes' }),

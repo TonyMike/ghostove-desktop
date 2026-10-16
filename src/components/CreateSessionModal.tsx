@@ -14,7 +14,7 @@ import {
   ExternalLink,
   RotateCw,
 } from 'lucide-react';
-import { WEB_API_URL } from '../utils/config';
+import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
 import { openBrowserUrl } from '../utils/browser';
 import { getStoredToken } from '../utils/store';
 
@@ -60,6 +60,7 @@ export function CreateSessionModal({
   const [selectedResumeId, setSelectedResumeId] = useState<string>('');
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>('');
   const [loadingContext, setLoadingContext] = useState<boolean>(false);
+  const [contextLoadError, setContextLoadError] = useState<string | null>(null);
 
   // Step 2: Preferences
   const [language, setLanguage] = useState('English');
@@ -83,11 +84,13 @@ export function CreateSessionModal({
     setErrors({});
     setSelectedResumeId('');
     setSelectedDocumentId('');
+    setContextLoadError(null);
   }, [isOpen]);
 
-  // Fetch user's resumes and documents from web API
+  // Fetch user's resumes and documents from the backend API.
   const fetchContextData = useCallback(async () => {
     setLoadingContext(true);
+    setContextLoadError(null);
     try {
       const activeToken = token || (await getStoredToken());
       const headers: Record<string, string> = {};
@@ -95,22 +98,20 @@ export function CreateSessionModal({
         headers['Authorization'] = `Bearer ${activeToken}`;
       }
 
+      const fetchJson = async (path: string) => {
+        const response = await fetch(`${BACKEND_API_URL}${path}`, { headers, cache: 'no-store' });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(body?.detail || `Backend returned ${response.status} for ${path}`);
+        }
+        return body;
+      };
+
       const [resumesRes, docsRes] = await Promise.allSettled([
-        fetch(`${WEB_API_URL}/api/resumes`, { headers }).then(async (r) => {
-          if (!r.ok) {
-            console.warn(`[Desktop Modal] /api/resumes responded with status ${r.status}`);
-            return null;
-          }
-          return r.json();
-        }),
-        fetch(`${WEB_API_URL}/api/documents`, { headers }).then(async (r) => {
-          if (!r.ok) {
-            console.warn(`[Desktop Modal] /api/documents responded with status ${r.status}`);
-            return null;
-          }
-          return r.json();
-        }),
+        fetchJson('/api/resumes'),
+        fetchJson('/api/documents'),
       ]);
+      const errors: string[] = [];
 
       if (resumesRes.status === 'fulfilled' && resumesRes.value) {
         const list: ResumeOption[] = resumesRes.value.resumes || [];
@@ -122,6 +123,7 @@ export function CreateSessionModal({
       } else {
         if (resumesRes.status === 'rejected') {
           console.warn('[Desktop Modal] Resumes fetch rejected:', resumesRes.reason);
+          errors.push('resumes');
         }
         setResumes([]);
       }
@@ -135,11 +137,16 @@ export function CreateSessionModal({
       } else {
         if (docsRes.status === 'rejected') {
           console.warn('[Desktop Modal] Documents fetch rejected:', docsRes.reason);
+          errors.push('documents');
         }
         setDocuments([]);
       }
+      if (errors.length > 0) {
+        setContextLoadError(`Could not load ${errors.join(' and ')} from Ghostove Backend. Check the connection and retry.`);
+      }
     } catch (err) {
       console.warn('[Desktop Modal] Error fetching resumes/documents:', err);
+      setContextLoadError('Could not reach Ghostove Backend. Check the connection and retry.');
     } finally {
       setLoadingContext(false);
     }
@@ -202,14 +209,14 @@ export function CreateSessionModal({
     }
 
     try {
-      // Create session directly via cloud web API
-      const res = await fetch(`${WEB_API_URL}/api/sessions`, {
+      // Create the session through the backend API; Web remains the pairing and dashboard surface.
+      const res = await fetch(`${BACKEND_API_URL}/api/sessions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
-      }).catch(() => null);
+      });
 
-      if (res && res.ok) {
+      if (res.ok) {
         const data = await res.json();
         const createdSessionId = data.session_id || data.id;
         const newSessionObj = {
@@ -232,11 +239,12 @@ export function CreateSessionModal({
         }
         onClose();
       } else {
-        const errText = res ? await res.text().catch(() => '') : '';
+        const errorBody = await res.json().catch(() => null);
+        const errText = errorBody?.detail || errorBody?.error || `Backend returned ${res.status}`;
         setErrors({
-          submit: 'Could not create session. Please make sure the service is running.',
+          submit: `Could not create session: ${errText}`,
         });
-        console.warn('[Desktop Create Session] Error response:', errText);
+        console.warn('[Desktop Create Session] Error response:', errorBody);
       }
     } catch (e: any) {
       console.error('[Desktop Create Session] Error:', e);
@@ -444,7 +452,7 @@ export function CreateSessionModal({
                   {loadingContext && (
                     <span className="text-[10px] text-emerald-500 flex items-center gap-1 font-medium">
                       <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Syncing web data...</span>
+                      <span>Syncing backend data...</span>
                     </span>
                   )}
                 </div>
@@ -495,7 +503,7 @@ export function CreateSessionModal({
                     </select>
                     {resumes.length === 0 && !loadingContext && (
                       <p className="text-[10px] text-slate-400">
-                        No resumes found on web profile.
+                        No resumes found on your account.
                       </p>
                     )}
                   </div>
@@ -545,11 +553,24 @@ export function CreateSessionModal({
                     </select>
                     {documents.length === 0 && !loadingContext && (
                       <p className="text-[10px] text-slate-400">
-                        No custom docs found on web profile.
+                        No context documents found on your account.
                       </p>
                     )}
                   </div>
                 </div>
+                {contextLoadError && (
+                  <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200">
+                    <span>{contextLoadError}</span>
+                    <button
+                      type="button"
+                      onClick={() => fetchContextData()}
+                      disabled={loadingContext}
+                      className="shrink-0 font-semibold underline underline-offset-2 disabled:opacity-50"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}

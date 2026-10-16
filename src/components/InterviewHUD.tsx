@@ -19,7 +19,7 @@ import {
   ClickableRect,
 } from "../utils/windowManager";
 import { openBrowserUrl } from "../utils/browser";
-import { WEB_API_URL, WS_URL } from "../utils/config";
+import { WEB_API_URL, BACKEND_API_URL, WS_URL } from "../utils/config";
 import {
   MousePointer,
   CheckCircle2,
@@ -224,22 +224,24 @@ export function InterviewHUD({
         };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        // Save to Next.js Web API
-        fetch(`${WEB_API_URL}/api/sessions/${sessionId}`, {
-          method: "PATCH",
+        // Persist session state through the backend data API.
+        fetch(`${BACKEND_API_URL}/api/sessions/save`, {
+          method: "POST",
           headers,
           body: JSON.stringify({
+            session_id: sessionId,
             status: "completed",
             duration_seconds: durationSeconds,
             transcript: formattedTranscript,
             ai_suggestions: aiSuggestions,
+            mode: "interview",
           }),
         }).catch((err) =>
           console.warn("[InterviewHUD] Web session save error:", err),
         );
 
-        // Auto trigger AI note generation
-        fetch(`${WEB_API_URL}/api/sessions/${sessionId}/ai`, {
+        // Auto trigger AI note generation through the backend data API.
+        fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
           method: "POST",
           headers,
           body: JSON.stringify({ action: "generate_notes" }),
