@@ -10,6 +10,7 @@ on:
 
 jobs:
   release:
+    environment: "ghostove desktop"
     permissions:
       contents: write
     env:
