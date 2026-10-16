@@ -75,6 +75,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_WEB_API_URL: ${{ vars.VITE_WEB_API_URL }}
         with:
           tagName: v${{ steps.versioning.outputs.version }}
           releaseName: 'Ghostove Desktop v${{ steps.versioning.outputs.version }}'

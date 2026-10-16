@@ -9,8 +9,8 @@ Ghostove Desktop is a lightweight, low-latency Tauri v2 application providing a 
 ## ⚡ Key Features & OS Hooks
 
 1. **Screen-Share Invisibility Protocol ([main.rs](file:///Users/tonymike/Documents/workspace/ghostove/ghostove-desktop/src-tauri/src/main.rs))**:
-   - **Windows**: Calls Win32 FFI `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (`0x00000011`). Omits HUD window from Zoom, Teams, Meet, and OBS screen sharing.
-   - **macOS**: Calls Cocoa Objective-C binding `[window setSharingType:NSWindowSharingNone]` and uses `Info.plist` key `LSUIElement = true` to hide app from Dock and Cmd+Tab switcher.
+   - **Windows**: Requests Win32 `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (`0x00000011`) and reads the setting back. This is best effort: support depends on Windows version and capture path, so verify behavior in each meeting app before relying on it.
+   - **macOS**: Requests the legacy Cocoa `[window setSharingType:NSWindowSharingNone]` setting. Modern screen-sharing behavior is not guaranteed; verify behavior in each meeting app before relying on it. `Info.plist` key `LSUIElement = true` hides the app from the Dock and Cmd+Tab switcher, but does not provide capture exclusion.
 
 2. **Deep-Link Authentication Protocol (`ghostove://`)**:
    - Configured custom protocol in `tauri.conf.json`.
