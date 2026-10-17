@@ -329,17 +329,11 @@ function InterviewTopBarComponent({
         {/* Dynamic Interview Elapsed Timer */}
         <InterviewSessionTimer initialSeconds={timerSeconds ?? 0} />
 
-        {remainingSeconds !== null && remainingSeconds !== undefined && (
+        {remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds <= 60 && (
           <Tooltip content="Available interview time" position="bottom">
             <div
               aria-label={`${Math.floor(remainingSeconds / 60)} minutes and ${remainingSeconds % 60} seconds remaining`}
-              className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-xs font-semibold tabular-nums select-none ${
-                remainingSeconds <= 120
-                  ? 'border-rose-400/30 bg-rose-500/15 text-rose-200'
-                  : remainingSeconds <= 300
-                    ? 'border-amber-400/30 bg-amber-500/15 text-amber-200'
-                    : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
-              }`}
+              className="flex items-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-500/15 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-rose-200 select-none"
             >
               <span className="font-sans text-[10px] font-medium opacity-80">Left</span>
               <span>{formatRemainingTime(remainingSeconds)}</span>

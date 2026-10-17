@@ -29,3 +29,16 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(166, 176, 168, 0.42);
 }
+
+/* Keep the desktop app free of shadows across every component and state. */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(110, 231, 183, 0.85);
+  outline-offset: 2px;
+}
