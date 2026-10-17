@@ -67,7 +67,6 @@ function AppContent() {
   }, [view]);
 
   const checkUserAccess = useCallback(async (userToken: string | null): Promise<InterviewTimeCheck> => {
-    setInterviewTimeStatus('checking');
     if (!userToken) {
       setInterviewTimeStatus('unavailable');
       return 'unavailable';
@@ -141,6 +140,7 @@ function AppContent() {
     pairingTokenReceived.current = true;
     await setStoredToken(newToken);
     setToken(newToken);
+    setInterviewTimeStatus('checking');
     void checkUserAccess(newToken);
     setView('session-select');
     try {
@@ -164,6 +164,7 @@ function AppContent() {
     if (payload.token) {
       await setStoredToken(payload.token);
       setToken(payload.token);
+      setInterviewTimeStatus('checking');
     }
 
     // Bring desktop app window to foreground, unminimize, and focus
@@ -221,6 +222,7 @@ function AppContent() {
 
       setView('connect-session');
     } else if (payload.action === 'auth' || payload.action === 'open' || payload.action === 'refresh') {
+      if (payload.token) void checkUserAccess(payload.token);
       setView('session-select');
     }
   }, [checkUserAccess, token, triggerSessionRefresh]);

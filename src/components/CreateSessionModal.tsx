@@ -32,6 +32,18 @@ interface DocumentOption {
   file_name?: string;
 }
 
+interface InterviewModelOption {
+  id: string;
+  label: string;
+}
+
+function getInterviewModelDisplayName(label: string): string {
+  return label
+    .replace(/\s*\(\s*free\s*\)\s*/gi, ' ')
+    .replace(/\s*[·•|–—-]\s*free\s*$/i, '')
+    .trim();
+}
+
 interface CreateSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -64,7 +76,10 @@ export function CreateSessionModal({
 
   // Step 2: Preferences
   const [language, setLanguage] = useState('English');
-  const [model, setModel] = useState('gemini-3.5-flash');
+  const [model, setModel] = useState('');
+  const [availableModels, setAvailableModels] = useState<InterviewModelOption[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [aiInstructions, setAiInstructions] = useState('');
   const [showInstructions, setShowInstructions] = useState(false);
   const [saveTranscript, setSaveTranscript] = useState(true);
@@ -72,6 +87,56 @@ export function CreateSessionModal({
   // Status
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const fetchInterviewModels = useCallback(async (signal?: AbortSignal) => {
+    setModelsLoading(true);
+    setModelsError(null);
+
+    try {
+      const activeToken = token || (await getStoredToken());
+      const headers: Record<string, string> = {};
+      if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
+
+      const response = await fetch(`${WEB_API_URL}/api/interview-models`, {
+        headers,
+        cache: 'no-store',
+        signal,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || `Could not load active interview models (${response.status}).`);
+      }
+
+      const models = Array.isArray(data?.models)
+        ? data.models.filter((item: unknown): item is InterviewModelOption => {
+            if (!item || typeof item !== 'object') return false;
+            const candidate = item as Partial<InterviewModelOption>;
+            return typeof candidate.id === 'string' && typeof candidate.label === 'string';
+          })
+        : [];
+
+      setAvailableModels(models);
+      const defaultModel = typeof data?.defaultModel === 'string' && models.some((item) => item.id === data.defaultModel)
+        ? data.defaultModel
+        : models[0]?.id || '';
+      setModel(defaultModel);
+      if (models.length === 0) setModelsError('No interview models are currently active. Please try again later.');
+    } catch (error) {
+      if (signal?.aborted) return;
+      setAvailableModels([]);
+      setModel('');
+      setModelsError(error instanceof Error ? error.message : 'Could not load active interview models.');
+    } finally {
+      if (!signal?.aborted) setModelsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    void fetchInterviewModels(controller.signal);
+    return () => controller.abort();
+  }, [isOpen, fetchInterviewModels]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -182,6 +247,14 @@ export function CreateSessionModal({
   };
 
   const handleCreate = async () => {
+    if (modelsLoading || !availableModels.some((item) => item.id === model)) {
+      setErrors((current) => ({
+        ...current,
+        submit: modelsError || 'Select an active interview model before creating the session.',
+      }));
+      return;
+    }
+
     setSubmitting(true);
     setErrors({});
 
@@ -313,7 +386,10 @@ export function CreateSessionModal({
                     type="button"
                     onClick={() => {
                       setSessionType('mock');
-                      if (model === 'claude-haiku-5-5') setModel('gemini-3.5-flash');
+                      if (model.toLowerCase().includes('claude')) {
+                        const fallback = availableModels.find((item) => !item.id.toLowerCase().includes('claude'));
+                        if (fallback) setModel(fallback.id);
+                      }
                     }}
                     className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       sessionType === 'mock'
@@ -609,16 +685,35 @@ export function CreateSessionModal({
                 </div>
                 <select
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  onChange={(e) => {
+                    setModel(e.target.value);
+                    if (errors.submit) setErrors((current) => ({ ...current, submit: '' }));
+                  }}
+                  disabled={modelsLoading || availableModels.length === 0}
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-slate-200 font-medium"
                 >
-                  <option value="gemini-3.5-flash">⚡ Gemini 3.5 Flash</option>
-                  <option value="chatgpt">🚀 ChatGPT (OpenAI)</option>
-                  {sessionType === 'interview' && (
-                    <option value="claude-haiku-5-5">✨ Claude Haiku 5.5</option>
-                  )}
+                  {modelsLoading && <option value="">Loading active models…</option>}
+                  {!modelsLoading && availableModels.length === 0 && <option value="">No active models</option>}
+                  {availableModels.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {getInterviewModelDisplayName(item.label)}
+                    </option>
+                  ))}
                 </select>
               </div>
+              {modelsError && (
+                <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200">
+                  <span>{modelsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void fetchInterviewModels()}
+                    disabled={modelsLoading}
+                    className="shrink-0 font-semibold underline underline-offset-2 disabled:opacity-50"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
               {/* AI Instructions */}
               <div className="space-y-2">
@@ -695,7 +790,7 @@ export function CreateSessionModal({
             <button
               type="button"
               onClick={handleCreate}
-              disabled={submitting}
+              disabled={submitting || modelsLoading || !availableModels.some((item) => item.id === model)}
               className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-emerald-600/20"
             >
               {submitting ? (
