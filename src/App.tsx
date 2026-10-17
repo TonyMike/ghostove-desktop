@@ -19,6 +19,8 @@ import { openBrowserUrl } from './utils/browser';
 import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
 import { MandatoryUpdater } from './components/MandatoryUpdater';
 
+type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
+
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,8 @@ function AppContent() {
   const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
   const [showScreenPosition, setShowScreenPosition] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isPaid, setIsPaid] = useState(true);
+  const [hasInterviewTime, setHasInterviewTime] = useState(true);
+  const [timeCheckIssue, setTimeCheckIssue] = useState<'exhausted' | 'unavailable'>('exhausted');
   const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const pairingTokenReceived = useRef(false);
@@ -62,26 +65,30 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [view]);
 
-  const checkUserAccess = useCallback(async (userToken: string | null): Promise<boolean> => {
-    if (!userToken) return false;
+  const checkUserAccess = useCallback(async (userToken: string | null): Promise<InterviewTimeCheck> => {
+    if (!userToken) return 'unavailable';
     try {
-      const resWeb = await fetch(`${WEB_API_URL}/api/auth/me`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/credits`, {
         headers: { Authorization: `Bearer ${userToken}` },
+        cache: 'no-store',
       });
-      if (resWeb.ok) {
-        const data = await resWeb.json();
-        const hasAccess = !!(
-          data.credits?.is_paid ||
-          (data.credits?.free_demo_seconds_remaining > 0) ||
-          (data.credits?.paid_seconds_balance > 0)
-        );
-        setIsPaid(hasAccess);
-        return hasAccess;
-      }
+      if (!response.ok) return 'unavailable';
+
+      const credits = await response.json();
+      const remainingSeconds = credits.is_unlimited
+        ? Number(credits.daily_seconds_remaining)
+        : Number(credits.total_seconds_remaining ?? (
+            (credits.free_demo_seconds_remaining || 0) + (credits.paid_seconds_balance || 0)
+          ));
+      if (!Number.isFinite(remainingSeconds)) return 'unavailable';
+
+      const result = remainingSeconds > 0 ? 'available' : 'exhausted';
+      setHasInterviewTime(result === 'available');
+      return result;
     } catch (err) {
-      console.warn('[Ghostove Desktop] Could not fetch the account quota from web API:', err);
+      console.warn('[Ghostove Desktop] Could not verify remaining interview time:', err);
+      return 'unavailable';
     }
-    return true; // Default fallback if offline
   }, []);
 
   const verifyToken = useCallback(async (tokenToVerify: string): Promise<boolean> => {
@@ -188,8 +195,9 @@ function AppContent() {
       }
       setSelectedSession(sessionData);
 
-      const hasAccess = await checkUserAccess(payload.token || token);
-      if (!hasAccess) {
+      const timeCheck = await checkUserAccess(payload.token || token);
+      if (timeCheck !== 'available') {
+        setTimeCheckIssue(timeCheck);
         setView('plan-required');
         return;
       }
@@ -246,7 +254,7 @@ function AppContent() {
   };
 
   const handleGetMoreTimeOrPlan = () => {
-    openBrowserUrl(`${WEB_API_URL}/#pricing`);
+    openBrowserUrl(`${WEB_API_URL}/dashboard/plans`);
   };
 
   const handleSelectSession = async (sessionId: string, session?: SessionItem) => {
@@ -262,8 +270,9 @@ function AppContent() {
     };
     setSelectedSession(currentSession);
 
-    const hasAccess = await checkUserAccess(token);
-    if (!hasAccess) {
+    const timeCheck = await checkUserAccess(token);
+    if (timeCheck !== 'available') {
+      setTimeCheckIssue(timeCheck);
       setView('plan-required');
       return;
     }
@@ -380,13 +389,15 @@ function AppContent() {
       {!isCollapsed && view === 'plan-required' && (
         <PlanRequiredScreen
           session={selectedSession}
+          reason={timeCheckIssue}
           onBack={() => {
             triggerSessionRefresh();
             setView('session-select');
           }}
           onRefreshCredits={async () => {
-            const hasAccess = await checkUserAccess(token);
-            return hasAccess;
+            const result = await checkUserAccess(token);
+            if (result !== 'available') setTimeCheckIssue(result);
+            return result;
           }}
           onContinueSession={() => setView('connect-session')}
         />
@@ -395,9 +406,25 @@ function AppContent() {
       {!isCollapsed && view === 'connect-session' && (
         <ConnectSessionScreen
           session={selectedSession}
-          hasAccess={isPaid}
+          hasAccess={hasInterviewTime}
           onUpgradeRequired={() => setView('plan-required')}
+          onCheckTime={async () => {
+            const result = await checkUserAccess(token);
+            if (result !== 'available') {
+              setTimeCheckIssue(result);
+              setView('plan-required');
+              return false;
+            }
+            return true;
+          }}
           onConnect={async (stream) => {
+            const timeCheck = await checkUserAccess(token);
+            if (timeCheck !== 'available') {
+              stream?.getTracks().forEach((track) => track.stop());
+              setTimeCheckIssue(timeCheck);
+              setView('plan-required');
+              return;
+            }
             console.log('[Ghostove Desktop] Connecting call session with stream:', stream);
             const protection = await enforceScreenShareProtection();
             console.info('[Ghostove Desktop] Screen-share protection:', protection);

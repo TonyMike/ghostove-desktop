@@ -23,6 +23,7 @@ interface ConnectSessionScreenProps {
   onBack: () => void;
   hasAccess?: boolean;
   onUpgradeRequired?: () => void;
+  onCheckTime?: () => Promise<boolean>;
 }
 
 export function ConnectSessionScreen({
@@ -31,6 +32,7 @@ export function ConnectSessionScreen({
   onBack,
   hasAccess = true,
   onUpgradeRequired,
+  onCheckTime,
 }: ConnectSessionScreenProps) {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionType, setPermissionType] = useState<'mic' | 'share_audio'>('share_audio');
@@ -60,14 +62,22 @@ export function ConnectSessionScreen({
   };
 
   const handleConnectClick = async () => {
-    if (!hasAccess) {
-      if (onUpgradeRequired) {
-        onUpgradeRequired();
+    setCheckingAudio(true);
+    if (onCheckTime) {
+      const canStart = await onCheckTime();
+      if (!canStart) {
+        setCheckingAudio(false);
         return;
       }
     }
 
-    setCheckingAudio(true);
+    if (!hasAccess) {
+      if (onUpgradeRequired) {
+        onUpgradeRequired();
+        setCheckingAudio(false);
+        return;
+      }
+    }
 
     // 1. Verify candidate microphone access
     const perms = await checkSystemPermissions();
@@ -157,9 +167,9 @@ export function ConnectSessionScreen({
       {/* 2. Main Pre-Flight Audio & Stealth Telemetry Deck */}
       <div className="space-y-2.5 flex-1 flex flex-col justify-center py-2">
         {/* Card 0: Dual-Channel Capture */}
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 flex flex-col gap-2.5 text-left shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 flex flex-col gap-2.5 text-left">
           <div className="flex gap-3">
-            <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20 shadow-sm">
+            <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
               <Headphones className="w-4 h-4" />
             </div>
             <div className="text-xs leading-relaxed text-slate-300 flex-1">
@@ -245,7 +255,7 @@ export function ConnectSessionScreen({
       <div className="space-y-2 pt-2">
         {!hasAccess && (
           <div className="text-center text-[11px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5">
-            <span>Free trial exhausted (0m remaining) · Plan required to launch</span>
+            <span>No interview time available · Buy time or choose a plan to start</span>
           </div>
         )}
 
@@ -262,16 +272,12 @@ export function ConnectSessionScreen({
             type="button"
             disabled={checkingAudio}
             onClick={handleConnectClick}
-            className={`flex-1 py-2.5 px-4 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
-              !hasAccess
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/20'
-                : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950 shadow-emerald-500/20'
-            }`}
+            className="flex-1 py-2.5 px-4 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950"
           >
             {checkingAudio ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                <span>Verifying Audio...</span>
+                <span>Checking time and audio...</span>
               </>
             ) : !hasAccess ? (
               <>

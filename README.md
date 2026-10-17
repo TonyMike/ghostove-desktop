@@ -50,6 +50,14 @@ npm run tauri dev
 
 When Ghostove Web is running at `http://localhost:3000`, the desktop pairing page sends the sign-in token to the development app's loopback bridge at `127.0.0.1:1422`. Keep `npm run tauri dev` running and leave port `1422` available. Pairing from the production website continues to use the `ghostove://` protocol.
 
+### Desktop releases and in-app updates
+
+The source repository stays private. GitHub Actions publishes only signed installers and Tauri's `latest.json` manifest to the public `TonyMike/ghostove-desktop-releases` repository. The release repository contains only a README on its `master` branch; do not copy the desktop source into it.
+
+In the private `ghostove-desktop` repository, add the Actions environment secret `GHOSTOVE_RELEASES_TOKEN` to the `ghostove desktop` environment. Use a fine-grained token with access to only `ghostove-desktop-releases` and the repository `Contents: Read and write` permission. Keep `TAURI_SIGNING_PRIVATE_KEY` in the private repository's Actions environment as it is now. The workflow needs both secrets to publish updater-enabled builds.
+
+Users running a build that points at the old private update feed need to install one release manually after this feed migration. Subsequent builds can update through the app.
+
 ---
 
 ## 📦 Project Structure
