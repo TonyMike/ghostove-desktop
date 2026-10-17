@@ -38,12 +38,18 @@ export interface SessionItem {
 interface SessionSelectScreenProps {
   token?: string | null;
   refreshTrigger?: number;
+  interviewTimeStatus: 'available' | 'exhausted' | 'unavailable' | 'checking';
+  onPurchaseTime: () => void;
+  onRefreshTime: () => Promise<unknown>;
   onStartSession: (sessionId: string, session?: SessionItem) => void;
 }
 
 export function SessionSelectScreen({
   token,
   refreshTrigger,
+  interviewTimeStatus,
+  onPurchaseTime,
+  onRefreshTime,
   onStartSession,
 }: SessionSelectScreenProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -153,6 +159,7 @@ export function SessionSelectScreen({
       if (now - lastFocusFetch > 2500) {
         lastFocusFetch = now;
         loadSessions(true);
+        void onRefreshTime();
       }
     };
 
@@ -207,7 +214,7 @@ export function SessionSelectScreen({
       if (unlistenTauriFocus) unlistenTauriFocus();
       clearInterval(pollInterval);
     };
-  }, [loadSessions]);
+  }, [loadSessions, onRefreshTime]);
 
   // Pull-to-refresh event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -288,6 +295,14 @@ export function SessionSelectScreen({
 
   const handleOpenDashboard = () => openBrowserUrl(`${WEB_API_URL}/dashboard/sessions`);
   const handleCreateSession = () => setIsCreateModalOpen(true);
+  const handleSessionAction = (session: SessionItem) => {
+    if (interviewTimeStatus === 'checking') return;
+    if (interviewTimeStatus === 'exhausted') {
+      onPurchaseTime();
+      return;
+    }
+    onStartSession(session.id, session);
+  };
 
   const formatDate = (isoStr: string) => {
     try {
@@ -419,7 +434,7 @@ export function SessionSelectScreen({
           sortedSessions.map((sess) => (
             <div
               key={sess.id}
-              onClick={() => onStartSession(sess.id, sess)}
+              onClick={() => handleSessionAction(sess)}
               className="bg-slate-900/80 border border-slate-800/80 hover:border-emerald-500/40 rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3 relative cursor-pointer group"
             >
               {/* Header: Date + 3-Dot Options */}
@@ -444,12 +459,23 @@ export function SessionSelectScreen({
                       <button
                         onClick={() => {
                           setActiveMenuSessionId(null);
-                          onStartSession(sess.id, sess);
+                          handleSessionAction(sess);
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center gap-2 cursor-pointer font-medium"
+                        disabled={interviewTimeStatus === 'checking'}
+                        className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center gap-2 cursor-pointer font-medium disabled:opacity-50 disabled:cursor-wait"
                       >
-                        <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
-                        <span>Launch HUD</span>
+                        {interviewTimeStatus === 'exhausted' ? (
+                          <ExternalLink className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+                        )}
+                        <span>
+                          {interviewTimeStatus === 'checking'
+                            ? 'Checking time…'
+                            : interviewTimeStatus === 'exhausted'
+                              ? 'Purchase time'
+                              : 'Launch HUD'}
+                        </span>
                       </button>
                       <button
                         onClick={() => handleDeleteSession(sess.id)}
@@ -533,12 +559,23 @@ export function SessionSelectScreen({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStartSession(sess.id, sess);
+                    handleSessionAction(sess);
                   }}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-1 rounded-xl transition-all shadow-sm shadow-emerald-500/20 cursor-pointer flex items-center gap-1 group-hover:scale-105"
+                  disabled={interviewTimeStatus === 'checking'}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-1 rounded-xl transition-all shadow-sm shadow-emerald-500/20 cursor-pointer flex items-center gap-1 group-hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-emerald-500"
                 >
-                  <Play className="w-2.5 h-2.5 fill-slate-950" />
-                  <span>Launch HUD</span>
+                  {interviewTimeStatus === 'exhausted' ? (
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  ) : (
+                    <Play className="w-2.5 h-2.5 fill-slate-950" />
+                  )}
+                  <span>
+                    {interviewTimeStatus === 'checking'
+                      ? 'Checking time…'
+                      : interviewTimeStatus === 'exhausted'
+                        ? 'Purchase time'
+                        : 'Launch HUD'}
+                  </span>
                 </button>
               </div>
             </div>

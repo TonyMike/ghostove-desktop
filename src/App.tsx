@@ -20,6 +20,7 @@ import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
 import { MandatoryUpdater } from './components/MandatoryUpdater';
 
 type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
+type InterviewTimeStatus = InterviewTimeCheck | 'checking';
 
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
@@ -29,7 +30,7 @@ function AppContent() {
   const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
   const [showScreenPosition, setShowScreenPosition] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [hasInterviewTime, setHasInterviewTime] = useState(true);
+  const [interviewTimeStatus, setInterviewTimeStatus] = useState<InterviewTimeStatus>('checking');
   const [timeCheckIssue, setTimeCheckIssue] = useState<'exhausted' | 'unavailable'>('exhausted');
   const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
@@ -66,13 +67,20 @@ function AppContent() {
   }, [view]);
 
   const checkUserAccess = useCallback(async (userToken: string | null): Promise<InterviewTimeCheck> => {
-    if (!userToken) return 'unavailable';
+    setInterviewTimeStatus('checking');
+    if (!userToken) {
+      setInterviewTimeStatus('unavailable');
+      return 'unavailable';
+    }
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/credits`, {
         headers: { Authorization: `Bearer ${userToken}` },
         cache: 'no-store',
       });
-      if (!response.ok) return 'unavailable';
+      if (!response.ok) {
+        setInterviewTimeStatus('unavailable');
+        return 'unavailable';
+      }
 
       const credits = await response.json();
       const remainingSeconds = credits.is_unlimited
@@ -80,13 +88,17 @@ function AppContent() {
         : Number(credits.total_seconds_remaining ?? (
             (credits.free_demo_seconds_remaining || 0) + (credits.paid_seconds_balance || 0)
           ));
-      if (!Number.isFinite(remainingSeconds)) return 'unavailable';
+      if (!Number.isFinite(remainingSeconds)) {
+        setInterviewTimeStatus('unavailable');
+        return 'unavailable';
+      }
 
       const result = remainingSeconds > 0 ? 'available' : 'exhausted';
-      setHasInterviewTime(result === 'available');
+      setInterviewTimeStatus(result);
       return result;
     } catch (err) {
       console.warn('[Ghostove Desktop] Could not verify remaining interview time:', err);
+      setInterviewTimeStatus('unavailable');
       return 'unavailable';
     }
   }, []);
@@ -129,6 +141,7 @@ function AppContent() {
     pairingTokenReceived.current = true;
     await setStoredToken(newToken);
     setToken(newToken);
+    void checkUserAccess(newToken);
     setView('session-select');
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -139,7 +152,7 @@ function AppContent() {
     } catch (err) {
       console.warn('[Ghostove Desktop] Could not focus window after local pairing:', err);
     }
-  }, []);
+  }, [checkUserAccess]);
 
   const handleDeepLink = useCallback(async (payload: DeepLinkPayload) => {
     console.log('[Ghostove Desktop] Deep link received:', {
@@ -196,7 +209,11 @@ function AppContent() {
       setSelectedSession(sessionData);
 
       const timeCheck = await checkUserAccess(payload.token || token);
-      if (timeCheck !== 'available') {
+      if (timeCheck === 'exhausted') {
+        setView('session-select');
+        return;
+      }
+      if (timeCheck === 'unavailable') {
         setTimeCheckIssue(timeCheck);
         setView('plan-required');
         return;
@@ -257,6 +274,11 @@ function AppContent() {
     openBrowserUrl(`${WEB_API_URL}/dashboard/plans`);
   };
 
+  const handleRefreshInterviewTime = useCallback(
+    () => checkUserAccess(token),
+    [checkUserAccess, token],
+  );
+
   const handleSelectSession = async (sessionId: string, session?: SessionItem) => {
     const isMock = ((session?.mode || '') as string).toLowerCase().includes('mock');
     setHudMode(isMock ? 'mock' : 'live');
@@ -271,7 +293,11 @@ function AppContent() {
     setSelectedSession(currentSession);
 
     const timeCheck = await checkUserAccess(token);
-    if (timeCheck !== 'available') {
+    if (timeCheck === 'exhausted') {
+      // Keep the user on the session list, where the launch action becomes Purchase time.
+      return;
+    }
+    if (timeCheck === 'unavailable') {
       setTimeCheckIssue(timeCheck);
       setView('plan-required');
       return;
@@ -406,7 +432,7 @@ function AppContent() {
       {!isCollapsed && view === 'connect-session' && (
         <ConnectSessionScreen
           session={selectedSession}
-          hasAccess={hasInterviewTime}
+          hasAccess={interviewTimeStatus === 'available'}
           onUpgradeRequired={() => setView('plan-required')}
           onCheckTime={async () => {
             const result = await checkUserAccess(token);
@@ -442,6 +468,9 @@ function AppContent() {
         <SessionSelectScreen
           token={token}
           refreshTrigger={sessionRefreshTrigger}
+          interviewTimeStatus={interviewTimeStatus}
+          onPurchaseTime={handleGetMoreTimeOrPlan}
+          onRefreshTime={handleRefreshInterviewTime}
           onStartSession={handleSelectSession}
         />
       )}
