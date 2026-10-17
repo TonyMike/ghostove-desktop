@@ -19,6 +19,9 @@ jobs:
       VITE_WEB_API_URL: ${{ vars.VITE_WEB_API_URL }}
     strategy:
       fail-fast: false
+      # The Tauri action updates latest.json from each matrix job. Serialize
+      # publishers so one platform cannot overwrite the other's updater entry.
+      max-parallel: 1
       matrix:
         include:
           - platform: 'macos-latest'
@@ -78,19 +81,27 @@ jobs:
 
       - name: Validate production environment
         shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           test -n "$VITE_BACKEND_API_URL" || { echo "::error::Missing Actions variable VITE_BACKEND_API_URL"; exit 1; }
           test -n "$VITE_WS_URL" || { echo "::error::Missing Actions variable VITE_WS_URL"; exit 1; }
           test -n "$VITE_WEB_API_URL" || { echo "::error::Missing Actions variable VITE_WEB_API_URL"; exit 1; }
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo "::error::Missing Actions secret TAURI_SIGNING_PRIVATE_KEY in the ghostove desktop environment"; exit 1; }
 
       - name: Build and Publish Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v${{ steps.versioning.outputs.version }}
           releaseName: 'Ghostove Desktop v${{ steps.versioning.outputs.version }}'
           releaseBody: 'Ghostove Stealth HUD - AI Copilot for Technical Interviews.'
           releaseDraft: false
           prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          retryAttempts: 3
           args: ${{ matrix.args }}

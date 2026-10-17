@@ -17,8 +17,9 @@ import {
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
 import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
+import { MandatoryUpdater } from './components/MandatoryUpdater';
 
-export default function App() {
+function AppContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
@@ -78,7 +79,7 @@ export default function App() {
         return hasAccess;
       }
     } catch (err) {
-      console.warn('[Ghostove Desktop] Could not fetch user credits from web API:', err);
+      console.warn('[Ghostove Desktop] Could not fetch the account quota from web API:', err);
     }
     return true; // Default fallback if offline
   }, []);
@@ -244,7 +245,7 @@ export default function App() {
     setView('session-select');
   };
 
-  const handleBuyCredits = () => {
+  const handleGetMoreTimeOrPlan = () => {
     openBrowserUrl(`${WEB_API_URL}/#pricing`);
   };
 
@@ -283,76 +284,86 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="w-full h-full bg-[#f4f4f0] dark:bg-slate-950 text-slate-500 flex items-center justify-center text-xs select-none">
-        Initializing Ghostove Stealth Engine...
-      </div>
+      <>
+        <div className="w-full h-full bg-[#f4f4f0] dark:bg-slate-950 text-slate-500 flex items-center justify-center text-xs select-none">
+          Initializing Ghostove Stealth Engine...
+        </div>
+        <MandatoryUpdater deferWhileSessionActive={view === 'active-session'} />
+      </>
     );
   }
 
   // Screen 1: Unauthenticated
   if (!token) {
     return (
-      <div className="w-full h-full select-none relative bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
-        <AuthScreen
-          onOpenScreenPosition={() => setShowScreenPosition(true)}
-        />
-        <ScreenPositionPopover
-          isOpen={showScreenPosition}
-          onClose={() => setShowScreenPosition(false)}
-        />
-      </div>
+      <>
+        <div className="w-full h-full select-none relative bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
+          <AuthScreen
+            onOpenScreenPosition={() => setShowScreenPosition(true)}
+          />
+          <ScreenPositionPopover
+            isOpen={showScreenPosition}
+            onClose={() => setShowScreenPosition(false)}
+          />
+        </div>
+        <MandatoryUpdater deferWhileSessionActive={view === 'active-session'} />
+      </>
     );
   }
 
   if (view === 'active-session') {
     return (
-      <div className="w-full h-full relative overflow-x-hidden">
-        {hudMode === 'mock' ? (
-          <MockInterviewHUD
-            token={token}
-            sessionId={selectedSession?.id}
-            jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
-            onBackToMenu={() => {
-              setSharedAudioStream(null);
-              triggerSessionRefresh();
-              setView('session-select');
-            }}
-            onSwitchToLive={() => setHudMode('live')}
-            onLogout={handleLogout}
-          />
-        ) : (
-          <InterviewHUD
-            token={token}
-            sessionId={selectedSession?.id}
-            initialSharedStream={sharedAudioStream}
-            onLogout={handleLogout}
-            onBackToMenu={() => {
-              setSharedAudioStream(null);
-              triggerSessionRefresh();
-              setView('session-select');
-            }}
-            onOpenScreenPosition={() => setShowScreenPosition(true)}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-            onBuyCredits={handleBuyCredits}
-          />
-        )}
-        {showScreenPosition && (
-          <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center">
-            <div className="relative w-[440px] h-[600px] bg-[#f4f4f0] dark:bg-slate-900 overflow-hidden">
-              <ScreenPositionPopover
-                isOpen={showScreenPosition}
-                onClose={() => setShowScreenPosition(false)}
-              />
+      <>
+        <div className="w-full h-full relative overflow-x-hidden">
+          {hudMode === 'mock' ? (
+            <MockInterviewHUD
+              token={token}
+              sessionId={selectedSession?.id}
+              jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
+              onBackToMenu={() => {
+                setSharedAudioStream(null);
+                triggerSessionRefresh();
+                setView('session-select');
+              }}
+              onSwitchToLive={() => setHudMode('live')}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <InterviewHUD
+              token={token}
+              sessionId={selectedSession?.id}
+              initialSharedStream={sharedAudioStream}
+              onLogout={handleLogout}
+              onBackToMenu={() => {
+                setSharedAudioStream(null);
+                triggerSessionRefresh();
+                setView('session-select');
+              }}
+              onOpenScreenPosition={() => setShowScreenPosition(true)}
+              onGetMoreTimeOrPlan={handleGetMoreTimeOrPlan}
+              isCollapsed={isCollapsed}
+              onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+            />
+          )}
+          {showScreenPosition && (
+            <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center">
+              <div className="relative w-[440px] h-[600px] bg-[#f4f4f0] dark:bg-slate-900 overflow-hidden">
+                <ScreenPositionPopover
+                  isOpen={showScreenPosition}
+                  onClose={() => setShowScreenPosition(false)}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+        <MandatoryUpdater deferWhileSessionActive />
+      </>
     );
   }
 
   // Screen 3 & 4: Session List View or Connect Call Session View (Main setup panel)
   return (
+    <>
     <div className="w-full h-full relative select-none bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
       {/* TopBar */}
       <TopBar
@@ -362,7 +373,6 @@ export default function App() {
           setIsCollapsed(false);
           setShowScreenPosition(true);
         }}
-        onBuyCredits={handleBuyCredits}
         onLogout={handleLogout}
       />
 
@@ -406,7 +416,6 @@ export default function App() {
           token={token}
           refreshTrigger={sessionRefreshTrigger}
           onStartSession={handleSelectSession}
-          onBuyCredits={handleBuyCredits}
         />
       )}
 
@@ -416,5 +425,11 @@ export default function App() {
         onClose={() => setShowScreenPosition(false)}
       />
     </div>
+    <MandatoryUpdater deferWhileSessionActive={false} />
+    </>
   );
+}
+
+export default function App() {
+  return <AppContent />;
 }

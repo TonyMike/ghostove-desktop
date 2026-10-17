@@ -16,7 +16,6 @@ interface HUDOverlayProps {
   onOpenScreenPosition?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  onBuyCredits?: () => void;
 }
 
 export function HUDOverlay({
@@ -26,7 +25,6 @@ export function HUDOverlay({
   onOpenScreenPosition,
   isCollapsed = false,
   onToggleCollapse,
-  onBuyCredits,
 }: HUDOverlayProps) {
   const [opacity, setOpacity] = useState(0.95);
   const [isClickThrough, setIsClickThrough] = useState(false);
@@ -137,7 +135,6 @@ export function HUDOverlay({
         isCollapsed={isCollapsed}
         onToggleCollapse={onToggleCollapse}
         onOpenScreenPosition={onOpenScreenPosition}
-        onBuyCredits={onBuyCredits}
         onLogout={onLogout}
         onToggleClickThrough={handleToggleClickThrough}
         isClickThrough={isClickThrough}

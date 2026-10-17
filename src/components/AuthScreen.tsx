@@ -31,7 +31,6 @@ export function AuthScreen({
     <div className="h-full w-full bg-slate-950 text-slate-100 flex flex-col select-none overflow-hidden">
       <TopBar
         onOpenScreenPosition={onOpenScreenPosition}
-        onBuyCredits={handleOpenBrowser}
       />
 
       <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">

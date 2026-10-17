@@ -22,7 +22,6 @@ interface TopBarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onOpenScreenPosition?: () => void;
-  onBuyCredits?: () => void;
   onLogout?: () => void;
   onToggleClickThrough?: () => void;
   isClickThrough?: boolean;
@@ -33,7 +32,6 @@ export function TopBar({
   isCollapsed,
   onToggleCollapse,
   onOpenScreenPosition,
-  onBuyCredits,
   onLogout,
   onToggleClickThrough,
   isClickThrough,

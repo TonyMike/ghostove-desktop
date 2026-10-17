@@ -37,7 +37,7 @@ interface InterviewHUDProps {
   onOpenScreenPosition?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  onBuyCredits?: () => void;
+  onGetMoreTimeOrPlan?: () => void;
 }
 
 export function InterviewHUD({
@@ -49,7 +49,7 @@ export function InterviewHUD({
   onOpenScreenPosition,
   isCollapsed: externalIsCollapsed = false,
   onToggleCollapse: externalToggleCollapse,
-  onBuyCredits,
+  onGetMoreTimeOrPlan,
 }: InterviewHUDProps) {
   const [showAnswer, setShowAnswer] = useState(true);
   const [showChat, setShowChat] = useState(false);
@@ -62,6 +62,7 @@ export function InterviewHUD({
   const [localCollapsed, setLocalCollapsed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
+  const [quotaRefreshFeedback, setQuotaRefreshFeedback] = useState<string | null>(null);
 
   // Decode authenticated user email from JWT token payload
   const userEmail = useMemo(() => {
@@ -118,6 +119,8 @@ export function InterviewHUD({
     volumeLevel,
     micError,
     quotaExhausted,
+    remainingSeconds,
+    refreshQuota,
     startRealAudio,
     transcriptList,
     interimText,
@@ -143,6 +146,28 @@ export function InterviewHUD({
     initialSharedStream,
     autoAnswer,
   });
+
+  useEffect(() => {
+    const refreshWhenAppReturns = () => {
+      if (document.visibilityState === 'visible') void refreshQuota();
+    };
+    window.addEventListener('focus', refreshWhenAppReturns);
+    document.addEventListener('visibilitychange', refreshWhenAppReturns);
+    return () => {
+      window.removeEventListener('focus', refreshWhenAppReturns);
+      document.removeEventListener('visibilitychange', refreshWhenAppReturns);
+    };
+  }, [refreshQuota]);
+
+  const handleRefreshQuota = async () => {
+    setQuotaRefreshFeedback(null);
+    const refreshedSeconds = await refreshQuota();
+    if (refreshedSeconds === null) {
+      setQuotaRefreshFeedback('Could not check your balance. Check your connection and try again.');
+    } else if (refreshedSeconds <= 0) {
+      setQuotaRefreshFeedback('No additional time is available yet. Complete a time purchase or choose a plan, then check again.');
+    }
+  };
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -438,27 +463,46 @@ export function InterviewHUD({
             </div>
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-white tracking-tight">
-                Free Demo Period Concluded
+                {quotaExhausted.reason === 'daily_cap_reached' ? 'Today’s Time Limit Reached' : 'You’re Out of Session Time'}
               </h3>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                {quotaExhausted.message ||
-                  "You have used your 10-minute trial. Live interview intelligence is now paused. Upgrade to continue receiving real-time answers."}
+                {quotaExhausted.message || 'Your session time is used. Add more time to continue receiving real-time answers.'}
               </p>
             </div>
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => openBrowserUrl(`${WEB_API_URL}/dashboard`)}
+                onClick={() => {
+                  setQuotaRefreshFeedback(null);
+                  if (quotaExhausted.reason === 'daily_cap_reached') {
+                    void openBrowserUrl(`${WEB_API_URL}/dashboard`);
+                  } else if (onGetMoreTimeOrPlan) {
+                    onGetMoreTimeOrPlan();
+                  } else {
+                    void openBrowserUrl(`${WEB_API_URL}/dashboard`);
+                  }
+                }}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
               >
                 <Zap className="w-4 h-4 fill-slate-950" />
-                <span>Upgrade to Pro / Add Credits</span>
+                <span>{quotaExhausted.reason === 'daily_cap_reached' ? 'View Dashboard' : 'Add time or choose a plan'}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
+              {quotaExhausted.reason !== 'daily_cap_reached' && (
+                <button
+                  onClick={() => void handleRefreshQuota()}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs cursor-pointer border border-slate-700 transition-colors"
+                >
+                  I’ve purchased time — check again
+                </button>
+              )}
+              {quotaRefreshFeedback && (
+                <p role="status" className="px-2 text-xs text-amber-200">{quotaRefreshFeedback}</p>
+              )}
               <button
                 onClick={requestEndSession}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs cursor-pointer border border-slate-800 transition-colors"
+                className="w-full bg-transparent hover:bg-slate-900 text-slate-400 hover:text-slate-200 font-medium py-2 px-4 rounded-xl text-xs cursor-pointer transition-colors"
               >
-                <span>Exit Session & Back to Dashboard</span>
+                <span>End session and return to menu</span>
               </button>
             </div>
           </div>
@@ -486,6 +530,7 @@ export function InterviewHUD({
           onToggleSharedAudio={toggleSharedAudio}
           micError={micError}
           onEnableMic={handleEnableMic}
+          remainingSeconds={remainingSeconds}
           isCollapsed={isCollapsed}
           onToggleCollapse={toggleCollapse}
           onOpenScreenPosition={onOpenScreenPosition}
@@ -506,6 +551,30 @@ export function InterviewHUD({
           onEdit={() => showToast("Session context & prompt settings")}
         />
       </div>
+
+      {!isCollapsed && remainingSeconds !== null && remainingSeconds > 0 && remainingSeconds <= 300 && (
+        <div className={`w-full max-w-[1040px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
+          remainingSeconds <= 60
+            ? 'border-rose-400/30 bg-rose-950/70 text-rose-100'
+            : 'border-amber-400/30 bg-amber-950/60 text-amber-100'
+        }`} role="status" aria-live="polite">
+          <p className="text-xs leading-relaxed">
+            {remainingSeconds < 60
+              ? 'Less than a minute of session time remains.'
+              : remainingSeconds <= 120
+                ? 'About two minutes of session time remain.'
+                : 'Five minutes or less of session time remain.'}
+            {' '}Your balance is shown in the top bar.
+          </p>
+          <button
+            type="button"
+            onClick={onGetMoreTimeOrPlan || (() => void openBrowserUrl(`${WEB_API_URL}/#pricing`))}
+            className="shrink-0 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-300"
+          >
+            Add time or choose a plan
+          </button>
+        </div>
+      )}
 
       {/* 2. Main Content Panels Container (Side-by-Side) */}
       {!isCollapsed && (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { floatTo16BitPCM, resampleTo16kHz } from '../utils/pcmEncoder';
 import { captureScreen } from '../utils/windowManager';
-import { WS_URL } from '../utils/config';
+import { BACKEND_API_URL, WS_URL } from '../utils/config';
 
 export interface TranscriptItem {
   id: string;
@@ -57,7 +57,9 @@ export function useRealAudioListener({
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingToken, setStreamingToken] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<string>('');
-  const [quotaExhausted, setQuotaExhausted] = useState<{ message: string } | null>(null);
+  const [quotaExhausted, setQuotaExhausted] = useState<{ message: string; reason?: string } | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
   const [pauseStatus, setPauseStatus] = useState<'idle' | 'speaking' | 'pausing' | 'triggered'>('idle');
 
   // Question & Answer History State for previous/next navigation
@@ -122,6 +124,44 @@ export function useRealAudioListener({
   const animationFrameRef = useRef<number | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const refreshQuota = useCallback(async (): Promise<number | null> => {
+    if (!token) return null;
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/credits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return null;
+      const credits = await response.json();
+      const remaining = credits.is_unlimited
+        ? credits.daily_seconds_remaining
+        : (credits.total_seconds_remaining ?? (
+            (credits.free_demo_seconds_remaining || 0) + (credits.paid_seconds_balance || 0)
+          ));
+      const normalizedRemaining = Math.max(0, Number(remaining) || 0);
+      setRemainingSeconds(normalizedRemaining);
+      if (normalizedRemaining > 0 && quotaExhausted) {
+        setQuotaExhausted(null);
+        setQuotaRefreshKey((key) => key + 1);
+      }
+      return normalizedRemaining;
+    } catch (error) {
+      console.warn('[RealAudio WS] Could not refresh quota:', error);
+      return null;
+    }
+  }, [quotaExhausted, token]);
+
+  useEffect(() => {
+    void refreshQuota();
+  }, [refreshQuota]);
+
+  useEffect(() => {
+    if (!isBackendConnected || remainingSeconds === null || remainingSeconds <= 0) return;
+    const intervalId = window.setInterval(() => {
+      setRemainingSeconds((seconds) => seconds === null ? null : Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isBackendConnected, remainingSeconds]);
   const isSpeakingRef = useRef<boolean>(false);
   const tokenBufferRef = useRef<string>('');
   const tokenFlushTimerRef = useRef<any>(null);
@@ -220,6 +260,16 @@ export function useRealAudioListener({
     []
   );
 
+  const waitForBackendWebSocket = useCallback(async (timeoutMs = 10000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) return ws;
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
+    return null;
+  }, []);
+
   // Capture the screen and answer its most relevant visible question or issue.
   const analyzeScreenshot = useCallback(
     async (targetLanguage: string = 'Python', customBase64?: string): Promise<boolean> => {
@@ -248,29 +298,33 @@ export function useRealAudioListener({
         setStreamingToken(null);
         setSourceType(`Screen ${time}`);
 
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: 'read_screen',
-              image_base64: imageB64,
-              target_language: targetLanguage,
-            })
-          );
-          return true;
-        } else {
-          setFullAnswer('Cannot analyze screen: Backend WebSocket is disconnected.');
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          setFullAnswer('Screenshot captured. Waiting for the backend to reconnect...');
+        }
+        const ws = await waitForBackendWebSocket();
+        if (!ws) {
+          setFullAnswer('The screenshot was captured, but the backend is still disconnected. Wait for it to reconnect, then try again.');
           setIsGenerating(false);
           return false;
         }
+
+        ws.send(
+          JSON.stringify({
+            type: 'read_screen',
+            image_base64: imageB64,
+            target_language: targetLanguage,
+          })
+        );
+        return true;
       } catch (err) {
         console.error('[RealAudio] Error in analyzeScreenshot:', err);
         const details = err instanceof Error ? err.message : String(err);
-        setFullAnswer(`Screen capture failed: ${details}`);
+        setFullAnswer(`Could not start screen analysis: ${details}`);
         setIsGenerating(false);
         return false;
       }
     },
-    []
+    [waitForBackendWebSocket]
   );
 
   // 3. Clear handlers
@@ -897,9 +951,9 @@ export function useRealAudioListener({
               setStreamingToken('');
             } else if (
               data.type === 'error' &&
-              ['llm_provider_unavailable', 'answer_generation_failed', 'stt_provider_unavailable'].includes(data.code)
+              !['concurrent_session_blocked', 'device_limit_exceeded'].includes(data.code)
             ) {
-              const errorMessage = `⚠️ ${data.message || 'Ghostove could not process that interview question. Please try again.'}`;
+              const errorMessage = `⚠️ ${data.message || 'Ghostove could not analyze the screenshot or generate an answer. Please try again.'}`;
               if (data.code === 'stt_provider_unavailable') {
                 setMicError(data.message || 'Live speech recognition could not connect.');
               }
@@ -921,11 +975,39 @@ export function useRealAudioListener({
                 qaHistoryRef.current = updatedList;
                 return updatedList;
               });
+            } else if (data.type === 'quota_update') {
+              const quota = data.quota || {};
+              const remaining = quota.is_unlimited
+                ? quota.daily_seconds_remaining
+                : quota.total_seconds_remaining;
+              if (Number.isFinite(Number(remaining))) {
+                const normalizedRemaining = Math.max(0, Number(remaining));
+                setRemainingSeconds(normalizedRemaining);
+                if (normalizedRemaining === 0) {
+                  const dailyLimitReached = Boolean(quota.is_unlimited);
+                  setQuotaExhausted({
+                    message: dailyLimitReached
+                      ? 'You have reached today’s session-time limit. Your allowance resets tomorrow at 00:00 UTC.'
+                      : 'Your available session time has been used. Add time to continue.',
+                    reason: dailyLimitReached ? 'daily_cap_reached' : 'quota_exhausted',
+                  });
+                }
+              }
             } else if (data.type === 'quota_exhausted') {
               console.warn('[RealAudio WS] Quota exhausted:', data.message);
+              setRemainingSeconds(0);
+              setQuotaExhausted({
+                message: data.message || 'Your available session time has been used. Add time to continue.',
+                reason: 'quota_exhausted',
+              });
               setFullAnswer('⚠️ ' + (data.message || 'Demo session finished (10 minutes used). Please upgrade in your web dashboard to continue.'));
             } else if (data.type === 'daily_cap_reached') {
               console.warn('[RealAudio WS] Daily cap reached:', data.message);
+              setRemainingSeconds(0);
+              setQuotaExhausted({
+                message: data.message || 'You have reached today’s session-time limit. Your allowance resets tomorrow at 00:00 UTC.',
+                reason: 'daily_cap_reached',
+              });
               setFullAnswer('⏳ ' + (data.message || 'Daily limit reached (2 hours). Your quota will reset tomorrow at 00:00 UTC.'));
             } else if (data.type === 'error' && data.code === 'concurrent_session_blocked') {
               console.error('[RealAudio WS] Concurrent session blocked');
@@ -973,7 +1055,7 @@ export function useRealAudioListener({
         wsRef.current.close();
       }
     };
-  }, [token, wsUrl, sessionId, selectedLanguage, appendFinalTranscript]);
+  }, [token, wsUrl, sessionId, selectedLanguage, appendFinalTranscript, quotaRefreshKey]);
 
   // 12. Auto-start real audio on mount
   useEffect(() => {
@@ -1015,6 +1097,8 @@ export function useRealAudioListener({
     volumeLevel,
     micError,
     quotaExhausted,
+    remainingSeconds,
+    refreshQuota,
     startRealAudio,
     stopRealAudio,
     toggleMic,

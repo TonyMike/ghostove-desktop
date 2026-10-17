@@ -47,6 +47,7 @@ interface InterviewTopBarProps {
   micError?: string | null;
   onEnableMic?: () => void;
   timerSeconds?: number;
+  remainingSeconds?: number | null;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenScreenPosition?: () => void;
@@ -94,6 +95,17 @@ const InterviewSessionTimer = React.memo(function InterviewSessionTimer({
   );
 });
 
+function formatRemainingTime(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainder = safeSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainder.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
+}
+
 function InterviewTopBarComponent({
   showAnswer,
   onToggleAnswer,
@@ -109,6 +121,7 @@ function InterviewTopBarComponent({
   micError,
   onEnableMic,
   timerSeconds,
+  remainingSeconds,
   isCollapsed,
   onToggleCollapse,
   onOpenScreenPosition,
@@ -315,6 +328,24 @@ function InterviewTopBarComponent({
 
         {/* Dynamic Interview Elapsed Timer */}
         <InterviewSessionTimer initialSeconds={timerSeconds ?? 0} />
+
+        {remainingSeconds !== null && remainingSeconds !== undefined && (
+          <Tooltip content="Available interview time" position="bottom">
+            <div
+              aria-label={`${Math.floor(remainingSeconds / 60)} minutes and ${remainingSeconds % 60} seconds remaining`}
+              className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-xs font-semibold tabular-nums select-none ${
+                remainingSeconds <= 120
+                  ? 'border-rose-400/30 bg-rose-500/15 text-rose-200'
+                  : remainingSeconds <= 300
+                    ? 'border-amber-400/30 bg-amber-500/15 text-amber-200'
+                    : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+              }`}
+            >
+              <span className="font-sans text-[10px] font-medium opacity-80">Left</span>
+              <span>{formatRemainingTime(remainingSeconds)}</span>
+            </div>
+          </Tooltip>
+        )}
 
         {/* Options / Settings Trigger Button & Popover (Matching Reference Image) */}
         <div className="relative z-50" ref={menuRef}>

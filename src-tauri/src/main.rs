@@ -948,6 +948,7 @@ fn capture_screen() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
         use base64::{engine::general_purpose, Engine as _};
+        use std::os::windows::process::CommandExt;
         use std::{process::Command, time::{SystemTime, UNIX_EPOCH}};
 
         // Windows desktop apps do not use macOS Screen Recording permissions.
@@ -970,6 +971,9 @@ fn capture_screen() -> Result<String, String> {
 
         let output = Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            // This is a GUI application; do not flash a console window while
+            // the short-lived capture helper runs.
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|error| format!("Could not start Windows screen capture: {error}"))?;
         if !output.status.success() {
@@ -1050,6 +1054,8 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(dev_pairing::DevPairingState::default())
         .manage(ClickThroughManager::default())
         .manage(ScreenStateManager::default())

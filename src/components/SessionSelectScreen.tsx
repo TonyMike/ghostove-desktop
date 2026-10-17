@@ -39,7 +39,6 @@ interface SessionSelectScreenProps {
   token?: string | null;
   refreshTrigger?: number;
   onStartSession: (sessionId: string, session?: SessionItem) => void;
-  onBuyCredits?: () => void;
 }
 
 export function SessionSelectScreen({
