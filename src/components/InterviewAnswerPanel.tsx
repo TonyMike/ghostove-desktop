@@ -32,6 +32,50 @@ interface InterviewAnswerPanelProps {
   fontSizeLevel?: number;
 }
 
+const CODE_KEYWORDS = new Set(
+  `abstract as async await break case catch class const continue debugger default defer do else enum export extends false finally for from func function if implements import in interface let match namespace new nil null of package private protected public readonly return self static struct super switch this throw throws trait true try type typeof undefined use var void while yield fn mut pub impl where crate mod dyn unsafe ref move go map chan select range defer fallthrough package fallthrough func const var interface type struct union template typename constexpr auto constexpr using virtual override final public private protected static new delete operator this class extends implements import export default async await yield let const function return if else switch case break continue try catch finally throw while do for in of typeof void int float double char bool long short byte decimal string object dynamic nullable record readonly async await static public private internal protected partial sealed abstract override virtual class interface enum struct namespace using return throw select match def lambda pass raise with except global nonlocal self not and or is in print from import as lambda yield nonlocal global None True False false true null NULL undefined NaN Infinity`.split(
+    /\s+/,
+  ),
+);
+
+function highlightCodeLine(line: string, language: string): React.ReactNode[] {
+  const tokens = /\/\*[\s\S]*?\*\/|\/\/.*|#.*|--.*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b|[A-Za-z_$][\w$]*/g;
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+
+  for (const match of line.matchAll(tokens)) {
+    const token = match[0];
+    const start = match.index ?? 0;
+    if (start > cursor) parts.push(line.slice(cursor, start));
+
+    const lower = token.toLowerCase();
+    let className = "text-slate-200";
+    if (/^(\/\/|#|--|\/\*)/.test(token)) {
+      className = "text-slate-500 italic";
+    } else if (/^[\"'`]/.test(token)) {
+      className = "text-amber-200";
+    } else if (/^\d/.test(token)) {
+      className = "text-violet-300";
+    } else if (CODE_KEYWORDS.has(lower)) {
+      className = "text-purple-300";
+    } else if (/^[A-Z]/.test(token)) {
+      className = "text-teal-200";
+    } else if (/\s*\(/.test(line.slice(start + token.length))) {
+      className = "text-sky-300";
+    }
+
+    parts.push(
+      <span key={`${start}-${token}`} className={className} data-language={language.toLowerCase()}>
+        {token}
+      </span>,
+    );
+    cursor = start + token.length;
+  }
+
+  if (cursor < line.length) parts.push(line.slice(cursor));
+  return parts;
+}
+
 function InterviewAnswerPanelComponent({
   question,
   answer,
@@ -134,8 +178,9 @@ function InterviewAnswerPanelComponent({
     return parts.length > 0 ? parts : cleanText.replace(/\*/g, '');
   };
 
-function CodeBlockCard({ code, language }: { code: string; language: string }) {
+function CodeBlockCard({ code, language, codeSize }: { code: string; language: string; codeSize: number }) {
   const [copied, setCopied] = useState(false);
+  const lines = code.split("\n");
 
   const handleCopyCode = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -145,28 +190,42 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
   };
 
   return (
-    <div className="rounded-xl border border-white/15 bg-black/60 overflow-hidden my-2.5 shadow-none select-text">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.06] border-b border-white/10 text-[11px] select-none">
-        <span className="font-mono uppercase font-bold text-emerald-400 flex items-center gap-1.5 tracking-wider">
+    <div className="my-3 overflow-hidden rounded-xl border border-white/10 bg-[#0b1018] shadow-none select-text">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.045] px-3 py-1.5 text-[11px] select-none">
+        <span className="flex items-center gap-1.5 rounded-md border border-emerald-300/15 bg-emerald-300/[0.07] px-1.5 py-0.5 font-mono font-bold uppercase tracking-wider text-emerald-300">
           <Code2 className="w-3.5 h-3.5" />
           {language || 'code'}
         </span>
         <Tooltip content={copied ? 'Copied code!' : 'Copy code'} position="left">
           <button
             onClick={handleCopyCode}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white transition-all text-[10.5px] cursor-pointer"
+            aria-label="Copy code block"
+            className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-[10.5px] text-slate-300 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
         </Tooltip>
       </div>
-      <pre
-        style={{ fontSize: `${codeSize}px` }}
-        className="p-3 font-mono leading-relaxed overflow-x-auto text-emerald-300/90 whitespace-pre"
-      >
-        <code>{code}</code>
-      </pre>
+      <div className="max-h-[420px] overflow-auto">
+        <div className="grid min-w-max grid-cols-[2.75rem_max-content] py-2.5" style={{ fontSize: `${codeSize}px`, lineHeight: 1.65 }}>
+          <div aria-hidden="true" className="sticky left-0 z-10 border-r border-white/[0.06] bg-[#0b1018] pr-2 text-right font-mono text-slate-600 select-none">
+            {lines.map((_, index) => (
+              <div key={index} className="px-2">{index + 1}</div>
+            ))}
+          </div>
+          <pre className="m-0 min-w-0 px-3 font-mono leading-[1.65] text-slate-200 whitespace-pre">
+            <code>
+              {lines.map((line, index) => (
+                <span key={index} className="block min-h-[1.65em]">
+                  {highlightCodeLine(line, language)}
+                  {line.length === 0 ? "\u00a0" : null}
+                </span>
+              ))}
+            </code>
+          </pre>
+        </div>
+      </div>
     </div>
   );
 }
@@ -220,6 +279,7 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
                 key={`code-${segIdx}`}
                 code={seg.content}
                 language={seg.language || 'code'}
+                codeSize={codeSize}
               />
             );
           }
