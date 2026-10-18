@@ -12,7 +12,7 @@ import {
   HelpCircle,
   LogOut,
   SlidersHorizontal,
-  Monitor,
+  Volume2,
   Mic,
   MicOff,
   User,
@@ -181,15 +181,16 @@ function InterviewTopBarComponent({
         <Tooltip
           content={
             sharedAudioError
-              ? `Screen/audio permission issue: ${sharedAudioError}`
+              ? `Computer audio issue: ${sharedAudioError}`
               : isSharedAudioActive
-              ? 'Shared Audio: Listening live (Click to stop)'
-              : 'Shared Audio: Stopped (Click to share audio)'
+              ? 'Interviewer audio is active. Your microphone is controlled separately. Click to stop.'
+              : 'Start computer audio capture so interviewer speech is transcribed, even with your microphone muted.'
           }
           position="bottom"
         >
           <button
             onClick={onToggleSharedAudio}
+            aria-label={isSharedAudioActive ? 'Stop computer audio capture' : 'Start computer audio capture'}
             className={`relative p-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center ${
               isSharedAudioActive
                 ? 'bg-rose-500/20 text-white border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.3)]'
@@ -199,7 +200,7 @@ function InterviewTopBarComponent({
             {isSharedAudioActive && (
               <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)] animate-pulse" />
             )}
-            <Monitor className="w-4 h-4" />
+            <Volume2 className="w-4 h-4" />
           </button>
         </Tooltip>
 

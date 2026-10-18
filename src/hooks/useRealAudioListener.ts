@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { floatTo16BitPCM, resampleTo16kHz } from '../utils/pcmEncoder';
-import { captureScreen, checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
+import {
+  captureScreen,
+  checkSystemPermissions,
+  startNativeSystemAudioCapture,
+  stopNativeSystemAudioCapture,
+  usesNativeMacSystemAudio,
+} from '../utils/windowManager';
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
 import { getOrCreateDeviceId } from '../utils/device';
 
@@ -26,7 +32,13 @@ interface UseRealAudioListenerProps {
   wsUrl?: string;
   sessionId?: string | null;
   initialSharedStream?: MediaStream | null;
+  startSharedAudioOnConnect?: boolean;
   autoAnswer?: boolean;
+}
+
+interface NativeSystemAudioChunk {
+  pcmBase64: string;
+  sampleRate: number;
 }
 
 function formatCurrentTime(): string {
@@ -42,6 +54,7 @@ export function useRealAudioListener({
   wsUrl = WS_URL,
   sessionId,
   initialSharedStream,
+  startSharedAudioOnConnect = false,
   autoAnswer = true,
 }: UseRealAudioListenerProps) {
   const [isMicActive, setIsMicActive] = useState(false);
@@ -81,6 +94,46 @@ export function useRealAudioListener({
   useEffect(() => {
     isSharedAudioActiveRef.current = isSharedAudioActive;
   }, [isSharedAudioActive]);
+
+  useEffect(() => {
+    if (!usesNativeMacSystemAudio()) return;
+    let isUnmounted = false;
+    let unlisten: (() => void) | null = null;
+
+    const registration = import('@tauri-apps/api/event').then(({ listen }) => listen<NativeSystemAudioChunk>('system-audio-chunk', ({ payload }) => {
+      if (isUnmounted || !isSharedAudioActiveRef.current) return;
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+      try {
+        const raw = Uint8Array.from(atob(payload.pcmBase64), (character) => character.charCodeAt(0));
+        if (raw.byteLength < 2 || raw.byteLength % 2 !== 0) return;
+        const pcm16 = new Int16Array(raw.buffer, raw.byteOffset, raw.byteLength / 2);
+        const samples = Float32Array.from(pcm16, (sample) => sample / 32768);
+        const audioBuffer = payload.sampleRate === 16000
+          ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+          : floatTo16BitPCM(resampleTo16kHz(samples, payload.sampleRate));
+        const tagged = new Uint8Array(1 + audioBuffer.byteLength);
+        tagged[0] = 1; // Channel 1 is interviewer/system audio.
+        tagged.set(new Uint8Array(audioBuffer), 1);
+        socket.send(tagged.buffer);
+      } catch (error) {
+        console.warn('[RealAudio] Could not decode native system audio:', error);
+      }
+    })).then((cleanup) => {
+      if (isUnmounted) cleanup();
+      else unlisten = cleanup;
+    });
+    nativeAudioListenerReadyRef.current = registration.then(() => undefined);
+    void registration.catch((error) => {
+      console.warn('[RealAudio] Could not listen for native system audio:', error);
+    });
+
+    return () => {
+      isUnmounted = true;
+      unlisten?.();
+    };
+  }, []);
 
   const navigateToQA = useCallback((index: number) => {
     const history = qaHistoryRef.current;
@@ -126,6 +179,7 @@ export function useRealAudioListener({
   const animationFrameRef = useRef<number | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const nativeAudioListenerReadyRef = useRef<Promise<void>>(Promise.resolve());
 
   const refreshQuota = useCallback(async (): Promise<number | null> => {
     if (!token) return null;
@@ -369,6 +423,11 @@ export function useRealAudioListener({
       sharedStreamRef.current.getTracks().forEach((track) => track.stop());
       sharedStreamRef.current = null;
     }
+    if (usesNativeMacSystemAudio()) {
+      void stopNativeSystemAudioCapture().catch((error) => {
+        console.warn('[RealAudio] Could not stop native system audio capture:', error);
+      });
+    }
     isSharedAudioActiveRef.current = false;
     setIsSharedAudioActive(false);
     console.log('[RealAudio] Shared audio stopped.');
@@ -500,9 +559,9 @@ export function useRealAudioListener({
           const resampled = resampleTo16kHz(inputData, audioCtx.sampleRate);
           const pcmBuffer = floatTo16BitPCM(resampled);
 
-          // With meeting audio, the mic is the candidate channel. In mic-only
-          // mode it feeds interviewer detection so spoken questions auto-answer.
-          const channelId = isSharedAudioActiveRef.current ? 2 : 1;
+          // Microphone audio always belongs to the candidate transcript. It
+          // must never enter interviewer detection or trigger an AI answer.
+          const channelId = 2;
           const tagged = new Uint8Array(1 + pcmBuffer.byteLength);
           tagged[0] = channelId;
           tagged.set(new Uint8Array(pcmBuffer), 1);
@@ -665,15 +724,21 @@ export function useRealAudioListener({
   const startSharedAudio = useCallback(async () => {
     try {
       console.log('[RealAudio] Requesting shared audio stream...');
-      const permissions = await checkSystemPermissions();
-      if (!permissions.screen_capture) {
-        const granted = await requestScreenCaptureAccess();
-        if (!granted) {
-          setSharedAudioError('Enable Screen & System Audio Recording for Ghostove Desktop, then quit and reopen Ghostove.');
-          return;
+      if (usesNativeMacSystemAudio()) {
+        await nativeAudioListenerReadyRef.current;
+        await startNativeSystemAudioCapture();
+        setSharedAudioError(null);
+        isSharedAudioActiveRef.current = true;
+        setIsSharedAudioActive(true);
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'audio_source', source: 'meeting_audio', enabled: true, auto_answer: autoAnswerRef.current }));
         }
+        console.log('[RealAudio] Native ScreenCaptureKit audio attached on Channel 1 (Interviewer).');
+        return;
       }
 
+      // Call getDisplayMedia directly from the monitor-button gesture. Awaiting
+      // native permission IPC first can consume WebKit's transient user activation.
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: {
@@ -687,7 +752,7 @@ export function useRealAudioListener({
       if (audioTracks.length === 0) {
         displayStream.getTracks().forEach((t) => t.stop());
         console.warn('[RealAudio] No audio track was selected in display media.');
-        alert('No audio detected in shared screen/tab. Please ensure "Share audio" is checked in the browser/system picker.');
+        setSharedAudioError('No audio track was returned. Choose a source that supports audio and enable Share audio.');
         return;
       }
 
@@ -699,12 +764,20 @@ export function useRealAudioListener({
       attachSharedStream(audioStream);
     } catch (err: any) {
       console.warn('[RealAudio] Screen audio capture cancelled or failed:', err);
+      if (usesNativeMacSystemAudio()) {
+        setSharedAudioError(err?.message || 'macOS could not start native system audio capture. Check Screen & System Audio Recording permissions and retry.');
+        setIsSharedAudioActive(false);
+        isSharedAudioActiveRef.current = false;
+        return;
+      }
       const permissions = await checkSystemPermissions();
       setSharedAudioError(
         !permissions.screen_capture
-          ? 'Enable Screen & System Audio Recording for Ghostove Desktop, quit and reopen Ghostove, then retry.'
-          : err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-            ? 'The macOS screen picker was dismissed. Retry and choose a display or meeting window with Share audio enabled.'
+          ? 'macOS has not granted screen recording to Ghostove Desktop. Enable it in System Settings, quit Ghostove, reopen it, and retry.'
+          : err.name === 'InvalidStateError'
+            ? 'macOS did not open the screen picker from this click. Click the monitor icon again to retry.'
+            : err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+              ? 'Screen audio capture was cancelled or denied. Retry and choose a source with Share audio enabled.'
             : err.message || 'Could not start shared audio.'
       );
       setIsSharedAudioActive(false);
@@ -1087,6 +1160,10 @@ export function useRealAudioListener({
       attachSharedStream(initialSharedStream);
     }
   }, [initialSharedStream, attachSharedStream]);
+
+  useEffect(() => {
+    if (startSharedAudioOnConnect) void startSharedAudio();
+  }, [startSharedAudioOnConnect, startSharedAudio]);
 
   // 14. Auto-resume suspended AudioContext on first user interaction (WebKit / macOS policy)
   useEffect(() => {

@@ -19,5 +19,7 @@
 	<string>Ghostove requires microphone access for real-time speech transcription.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Ghostove requires screen and audio recording permissions to capture call audio.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Ghostove captures call audio so interviewer speech can be transcribed independently of your microphone.</string>
 </dict>
 </plist>

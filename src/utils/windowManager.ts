@@ -120,6 +120,10 @@ export async function openPrivacySettings(settingType: string = 'microphone'): P
   await safeInvoke('open_privacy_settings', { settingType });
 }
 
+export async function requestScreenCaptureAccess(): Promise<boolean> {
+  return (await safeInvoke<boolean>('request_screen_capture_access')) ?? false;
+}
+
 export async function startDragging(): Promise<void> {
   const res = await safeInvoke('start_dragging_window');
   if (res === null) {
@@ -136,6 +140,22 @@ export async function startDragging(): Promise<void> {
 export async function captureScreen(): Promise<string> {
   const { invoke } = await import('@tauri-apps/api/core');
   return await invoke<string>('capture_screen');
+}
+
+export function usesNativeMacSystemAudio(): boolean {
+  return typeof window !== 'undefined'
+    && '__TAURI_INTERNALS__' in window
+    && /Macintosh|Mac OS X/i.test(navigator.userAgent || navigator.platform);
+}
+
+export async function startNativeSystemAudioCapture(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('start_system_audio_capture');
+}
+
+export async function stopNativeSystemAudioCapture(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('stop_system_audio_capture');
 }
 
 /**
@@ -198,11 +218,5 @@ export async function checkSystemPermissions(): Promise<SystemPermissions> {
     microphone: micGranted,
     screen_capture: true,
   };
-}
-
-/** Ask macOS to register Ghostove for screen-recording access before sharing. */
-export async function requestScreenCaptureAccess(): Promise<boolean> {
-  const granted = await safeInvoke<boolean>('request_screen_capture_access');
-  return granted === true;
 }
 

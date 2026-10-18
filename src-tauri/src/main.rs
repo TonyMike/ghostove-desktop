@@ -95,9 +95,114 @@ mod macos_panel {
     }
 }
 
+use base64::Engine as _;
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tauri::{Manager, WebviewWindow};
+use std::sync::{Arc, Mutex, OnceLock};
+use tauri::{Emitter, Manager, WebviewWindow};
+
+static SYSTEM_AUDIO_APP: OnceLock<tauri::AppHandle> = OnceLock::new();
+static SYSTEM_AUDIO_ACTIVE: AtomicBool = AtomicBool::new(false);
+static SYSTEM_AUDIO_COMMAND_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeSystemAudioChunk {
+    pcm_base64: String,
+    sample_rate: u32,
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn ghostove_system_audio_start(
+        error_buffer: *mut std::ffi::c_char,
+        error_capacity: usize,
+    ) -> i32;
+    fn ghostove_system_audio_stop();
+}
+
+#[no_mangle]
+unsafe extern "C" fn ghostove_on_system_audio(samples: *const f32, count: usize, sample_rate: u32) {
+    if samples.is_null() || count == 0 {
+        return;
+    }
+    let Some(app) = SYSTEM_AUDIO_APP.get() else {
+        return;
+    };
+
+    // ScreenCaptureKit's callback buffer is valid only for the duration of the
+    // callback, so copy and encode it before returning across the FFI boundary.
+    let samples = unsafe { std::slice::from_raw_parts(samples, count) };
+    let mut pcm = Vec::with_capacity(count * 2);
+    for sample in samples {
+        let sample = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+        pcm.extend_from_slice(&sample.to_le_bytes());
+    }
+
+    let chunk = NativeSystemAudioChunk {
+        pcm_base64: base64::engine::general_purpose::STANDARD.encode(pcm),
+        sample_rate,
+    };
+    if let Err(error) = app.emit("system-audio-chunk", chunk) {
+        eprintln!("[Ghostove] Could not forward captured system audio: {error}");
+    }
+}
+
+#[tauri::command]
+async fn start_system_audio_capture(app: tauri::AppHandle) -> Result<(), String> {
+    let _guard = SYSTEM_AUDIO_COMMAND_LOCK.lock().await;
+    if SYSTEM_AUDIO_ACTIVE.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    let _ = SYSTEM_AUDIO_APP.set(app);
+
+    #[cfg(target_os = "macos")]
+    {
+        let start_result = tokio::task::spawn_blocking(|| {
+            let mut error_buffer = [0i8; 1024];
+            let started = unsafe {
+                ghostove_system_audio_start(error_buffer.as_mut_ptr(), error_buffer.len())
+            };
+            if started == 1 {
+                Ok(())
+            } else {
+                let message = unsafe { std::ffi::CStr::from_ptr(error_buffer.as_ptr()) }
+                    .to_string_lossy()
+                    .into_owned();
+                Err(if message.is_empty() {
+                    "macOS could not start system audio capture.".to_string()
+                } else {
+                    message
+                })
+            }
+        })
+        .await
+        .map_err(|error| format!("System audio capture worker failed: {error}"))?;
+        start_result?;
+        SYSTEM_AUDIO_ACTIVE.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Native system audio capture is currently available on macOS only.".to_string())
+    }
+}
+
+#[tauri::command]
+async fn stop_system_audio_capture() -> Result<(), String> {
+    let _guard = SYSTEM_AUDIO_COMMAND_LOCK.lock().await;
+    if !SYSTEM_AUDIO_ACTIVE.swap(false, Ordering::AcqRel) {
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    tokio::task::spawn_blocking(|| unsafe { ghostove_system_audio_stop() })
+        .await
+        .map_err(|error| format!("System audio capture stop worker failed: {error}"))?;
+
+    Ok(())
+}
 
 // -------------------------------------------------------------------
 // OS-Specific Screen-Share Invisibility & Virtual Desktop Behaviors
@@ -1042,18 +1147,18 @@ fn check_system_permissions() -> Result<SystemPermissions, String> {
 }
 
 #[tauri::command]
-fn request_screen_capture_access() -> bool {
+fn request_screen_capture_access() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         #[link(name = "CoreGraphics", kind = "framework")]
         extern "C" {
             fn CGRequestScreenCaptureAccess() -> bool;
         }
-        return unsafe { CGRequestScreenCaptureAccess() };
+        Ok(unsafe { CGRequestScreenCaptureAccess() })
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        Ok(true)
     }
 }
 
@@ -1096,9 +1201,13 @@ fn main() {
             capture_screen,
             check_system_permissions,
             request_screen_capture_access,
+            start_system_audio_capture,
+            stop_system_audio_capture,
             dev_pairing::take_dev_pairing_token
         ])
         .setup(|app| {
+            let _ = SYSTEM_AUDIO_APP.set(app.handle().clone());
+
             #[cfg(debug_assertions)]
             if let Err(error) = dev_pairing::start(app.handle()) {
                 eprintln!("[Ghostove Dev Pairing] {error}");

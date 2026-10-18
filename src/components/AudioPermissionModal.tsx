@@ -11,7 +11,7 @@ import {
   Monitor
 } from 'lucide-react';
 import macGuideImg from '../assets/mac-permission-guide.png';
-import { checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
+import { checkSystemPermissions } from '../utils/windowManager';
 
 interface AudioPermissionModalProps {
   isOpen: boolean;
@@ -60,16 +60,7 @@ export function AudioPermissionModal({
 
     if (isShareAudio) {
       try {
-        const permissions = await checkSystemPermissions();
-        if (!permissions.screen_capture) {
-          const granted = await requestScreenCaptureAccess();
-          if (!granted) {
-            setTesting(false);
-            setErrorMsg('macOS has not granted screen recording to this running app yet. Turn on Ghostove Desktop in System Settings, quit Ghostove completely, then reopen it and try again.');
-            return;
-          }
-        }
-
+        // Preserve the Retry button's user gesture for WebKit's display picker.
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: {
@@ -100,8 +91,10 @@ export function AudioPermissionModal({
         setErrorMsg(
           !permissions.screen_capture
             ? 'macOS still reports screen recording as disabled. Turn on Ghostove Desktop in System Settings, quit Ghostove completely, then reopen it and try again.'
+            : err.name === 'InvalidStateError'
+              ? 'macOS did not open the screen picker from this click. Press Try Again and select a display or meeting window.'
             : err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-              ? 'The macOS screen picker was dismissed. Try again and select a display or meeting window, then enable Share audio.'
+              ? 'Screen audio capture was cancelled or denied. Try again and select a display or meeting window, then enable Share audio.'
               : err.message || 'System audio access could not be acquired.'
         );
       }

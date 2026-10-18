@@ -28,6 +28,7 @@ function AppContent() {
   const [view, setView] = useState<'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
   const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
+  const [startSharedAudioOnConnect, setStartSharedAudioOnConnect] = useState(false);
   const [showScreenPosition, setShowScreenPosition] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [interviewTimeStatus, setInterviewTimeStatus] = useState<InterviewTimeStatus>('checking');
@@ -360,6 +361,7 @@ function AppContent() {
               jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
               onBackToMenu={() => {
                 setSharedAudioStream(null);
+                setStartSharedAudioOnConnect(false);
                 triggerSessionRefresh();
                 setView('session-select');
               }}
@@ -372,9 +374,11 @@ function AppContent() {
               sessionId={selectedSession?.id}
               language={selectedSession?.language || 'English'}
               initialSharedStream={sharedAudioStream}
+              startSharedAudioOnConnect={startSharedAudioOnConnect}
               onLogout={handleLogout}
               onBackToMenu={() => {
                 setSharedAudioStream(null);
+                setStartSharedAudioOnConnect(false);
                 triggerSessionRefresh();
                 setView('session-select');
               }}
@@ -447,7 +451,7 @@ function AppContent() {
             }
             return true;
           }}
-          onConnect={async (stream) => {
+          onConnect={async (stream, startNativeSystemAudio) => {
             const timeCheck = await checkUserAccess(token);
             if (timeCheck !== 'available') {
               stream?.getTracks().forEach((track) => track.stop());
@@ -459,6 +463,7 @@ function AppContent() {
             const protection = await enforceScreenShareProtection();
             console.info('[Ghostove Desktop] Screen-share protection:', protection);
             setSharedAudioStream(stream || null);
+            setStartSharedAudioOnConnect(startNativeSystemAudio === true);
             setView('active-session');
           }}
           onBack={() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Video,
   Upload,
@@ -14,12 +14,19 @@ import {
 import { openBrowserUrl } from '../utils/browser';
 import { SessionItem } from './SessionSelectScreen';
 import { AudioPermissionModal } from './AudioPermissionModal';
-import { checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
+import {
+  checkSystemPermissions,
+  openPrivacySettings,
+  requestScreenCaptureAccess,
+  startNativeSystemAudioCapture,
+  stopNativeSystemAudioCapture,
+  usesNativeMacSystemAudio,
+} from '../utils/windowManager';
 import type { SystemPermissions } from '../utils/windowManager';
 
 interface ConnectSessionScreenProps {
   session?: SessionItem | null;
-  onConnect: (sharedStream?: MediaStream | null) => void;
+  onConnect: (sharedStream?: MediaStream | null, startNativeSystemAudio?: boolean) => void;
   onBack: () => void;
   hasAccess?: boolean;
   onUpgradeRequired?: () => void;
@@ -34,11 +41,75 @@ export function ConnectSessionScreen({
   onUpgradeRequired,
   onCheckTime,
 }: ConnectSessionScreenProps) {
+  const nativeMacPlatform = usesNativeMacSystemAudio();
+  const requiresMeetingAudio = !((session?.mode || '').toLowerCase().includes('mock'));
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionType, setPermissionType] = useState<'mic' | 'share_audio'>('share_audio');
   const [checkingAudio, setCheckingAudio] = useState(false);
   const [systemPermissions, setSystemPermissions] = useState<SystemPermissions | null>(null);
-  const [includeMeetingAudio, setIncludeMeetingAudio] = useState(false);
+  const [includeMeetingAudio, setIncludeMeetingAudio] = useState(
+    () => requiresMeetingAudio && nativeMacPlatform
+  );
+  const [selectingSharedAudio, setSelectingSharedAudio] = useState(false);
+  const [sharedAudioSelectionError, setSharedAudioSelectionError] = useState<string | null>(null);
+  const sharedAudioStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => () => {
+    sharedAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    sharedAudioStreamRef.current = null;
+  }, []);
+
+  const handleIncludeMeetingAudioChange = (checked: boolean) => {
+    setSharedAudioSelectionError(null);
+    if (nativeMacPlatform) {
+      setIncludeMeetingAudio(checked);
+      return;
+    }
+    if (!checked) {
+      sharedAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+      sharedAudioStreamRef.current = null;
+      setIncludeMeetingAudio(false);
+      return;
+    }
+
+    // Preserve the picker gesture on platforms that still use WebView capture.
+    const capturePromise = navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    });
+    setIncludeMeetingAudio(true);
+    setSelectingSharedAudio(true);
+    void capturePromise.then(async (displayStream) => {
+      displayStream.getVideoTracks().forEach((track) => track.stop());
+      const audioTracks = displayStream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        displayStream.getTracks().forEach((track) => track.stop());
+        setIncludeMeetingAudio(false);
+        setSharedAudioSelectionError('No audio track was returned. Choose a source that supports audio and enable Share audio.');
+        return;
+      }
+      sharedAudioStreamRef.current = new MediaStream(audioTracks);
+    }).catch(async (error: any) => {
+      console.warn('[Ghostove] Computer audio selection failed:', error);
+      setIncludeMeetingAudio(false);
+      const permissions = await checkSystemPermissions();
+      setSystemPermissions(permissions);
+      if (!permissions.screen_capture) {
+        setShowPermissionModal(true);
+        setSharedAudioSelectionError('macOS has not granted screen recording to Ghostove Desktop. Enable it in System Settings and reopen Ghostove.');
+      } else {
+        setSharedAudioSelectionError(
+          error?.name === 'InvalidStateError'
+            ? 'macOS did not open the picker from this click. Click the checkbox again to retry.'
+            : 'Audio selection was cancelled or denied. Click the checkbox again, then choose a source with Share audio enabled.'
+        );
+      }
+    }).finally(() => setSelectingSharedAudio(false));
+  };
 
   // Pre-flight check system permissions on screen load
   useEffect(() => {
@@ -63,6 +134,7 @@ export function ConnectSessionScreen({
 
   const handleConnectClick = async () => {
     setCheckingAudio(true);
+    setSharedAudioSelectionError(null);
     if (onCheckTime) {
       const canStart = await onCheckTime();
       if (!canStart) {
@@ -83,82 +155,86 @@ export function ConnectSessionScreen({
     const perms = await checkSystemPermissions();
     setSystemPermissions(perms);
 
-    let micOk = perms.microphone;
-    if (!micOk) {
-      try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 16000,
-            echoCancellation: false,
-            noiseSuppression: false,
-          },
-        });
-        micStream.getTracks().forEach((track) => track.stop());
-        micOk = true;
-      } catch (err) {
-        console.warn('[Ghostove] Microphone access check failed:', err);
+    try {
+      // Probe the actual WebView capture path on every platform; the native
+      // Windows permission status is not a reliable microphone grant check.
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: false,
+          noiseSuppression: false,
+        },
+      });
+      micStream.getTracks().forEach((track) => track.stop());
+    } catch (err) {
+      console.warn('[Ghostove] Microphone access check failed:', err);
+      setCheckingAudio(false);
+      setPermissionType('mic');
+      setShowPermissionModal(true);
+      return;
+    }
+
+    // Live sessions require a separate interviewer/system-audio source.
+    if (requiresMeetingAudio && !includeMeetingAudio) {
+      setSharedAudioSelectionError('Computer audio is required to start a live session. Select and enable it above.');
+      setCheckingAudio(false);
+      return;
+    }
+
+    const nativeMacAudio = requiresMeetingAudio && nativeMacPlatform;
+    let sharedAudioStream: MediaStream | null = null;
+    if (nativeMacAudio) {
+      // Request screen recording explicitly before the HUD opens. This access
+      // is also required by on-demand screenshot analysis.
+      const screenAccessGranted = await requestScreenCaptureAccess();
+      const refreshedPermissions = await checkSystemPermissions();
+      setSystemPermissions(refreshedPermissions);
+      if (!screenAccessGranted || !refreshedPermissions.screen_capture) {
+        setSharedAudioSelectionError(
+          'Screen & System Audio Recording access is required. Enable Ghostove Desktop in System Settings, then retry. macOS may require you to quit and reopen Ghostove after granting access.'
+        );
         setCheckingAudio(false);
-        setPermissionType('mic');
-        setShowPermissionModal(true);
         return;
       }
-    }
 
-    // 2. If user explicitly opted to include meeting / tab audio right away
-    if (includeMeetingAudio) {
-      if (!perms.screen_capture) {
-        const granted = await requestScreenCaptureAccess();
-        if (!granted) {
-          setCheckingAudio(false);
-          setPermissionType('share_audio');
-          setShowPermissionModal(true);
-          return;
-        }
-      }
-
+      // Start and stop once as a preflight so macOS asks for system-audio
+      // authorization before the session begins. The HUD starts capture again
+      // after its audio listener is mounted.
+      let captureStarted = false;
       try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
-
-        const audioTracks = displayStream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          displayStream.getVideoTracks().forEach((t) => t.stop());
-          const sharedAudioStream = new MediaStream(audioTracks);
-          setCheckingAudio(false);
-          onConnect(sharedAudioStream);
-          return;
-        } else {
-          displayStream.getTracks().forEach((t) => t.stop());
-          console.info('[Ghostove] No audio track selected in screen picker, continuing with mic.');
+        await startNativeSystemAudioCapture();
+        captureStarted = true;
+        await stopNativeSystemAudioCapture();
+        captureStarted = false;
+      } catch (error: any) {
+        if (captureStarted) {
+          try {
+            await stopNativeSystemAudioCapture();
+          } catch (_) {}
         }
-      } catch (err: any) {
-        console.info('[Ghostove] Meeting audio picker dismissed or cancelled:', err);
-        // If the user cancelled the picker dialog, do NOT show the error modal.
-        // Only if it's a hard permission failure and screen capture is disabled:
-        const refreshedPermissions = await checkSystemPermissions();
-        setSystemPermissions(refreshedPermissions);
-        if (
-          (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') &&
-          !refreshedPermissions.screen_capture
-        ) {
-          setCheckingAudio(false);
-          setPermissionType('share_audio');
-          setShowPermissionModal(true);
-          return;
-        }
+        console.warn('[Ghostove] System-audio permission preflight failed:', error);
+        setSharedAudioSelectionError(
+          'System-audio access is required. Enable Ghostove Desktop in System Settings → Privacy & Security → Screen & System Audio Recording, then retry.'
+        );
+        setCheckingAudio(false);
+        return;
       }
+    } else if (requiresMeetingAudio) {
+      const audioTrack = sharedAudioStreamRef.current?.getAudioTracks().find(
+        (track) => track.readyState === 'live' && track.enabled
+      );
+      if (!audioTrack) {
+        setSharedAudioSelectionError('Choose a display or meeting window and enable Share audio before starting the session.');
+        setCheckingAudio(false);
+        return;
+      }
+      sharedAudioStream = sharedAudioStreamRef.current;
     }
 
-    // 3. All necessary permissions are enabled! Connect directly without any pop-up.
+    sharedAudioStreamRef.current = null;
     setCheckingAudio(false);
-    onConnect(null);
+    onConnect(sharedAudioStream, nativeMacAudio);
   };
 
   return (
@@ -181,7 +257,7 @@ export function ConnectSessionScreen({
 
       {/* 2. Main Pre-Flight Audio & Stealth Telemetry Deck */}
       <div className="space-y-2.5 flex-1 flex flex-col justify-center py-2">
-        {/* Card 0: Dual-Channel Capture */}
+      {/* Card 0: Required permissions */}
         <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 flex flex-col gap-2.5 text-left">
           <div className="flex gap-3">
             <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
@@ -189,9 +265,13 @@ export function ConnectSessionScreen({
             </div>
             <div className="text-xs leading-relaxed text-slate-300 flex-1">
               <strong className="text-white block font-bold mb-0.5">
-                Dual-Channel Audio Capture
+                Required Before You Start
               </strong>
-              Captures your microphone & interviewer audio simultaneously with 1.2s token latency.
+              {requiresMeetingAudio
+                ? nativeMacPlatform
+                  ? 'Allow microphone access for your candidate transcript and Screen & System Audio Recording for interviewer audio and screenshot analysis. You can mute the microphone after the session starts.'
+                  : 'Allow microphone access, then select a display or meeting window with Share audio enabled. These are required for live interviewer transcription and screenshot analysis.'
+                : 'Allow microphone access so your voice can be transcribed during mock practice. You can mute the microphone after the session starts.'}
             </div>
           </div>
 
@@ -200,9 +280,9 @@ export function ConnectSessionScreen({
             <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>
-                {systemPermissions?.microphone
+                {nativeMacPlatform && systemPermissions?.microphone
                   ? 'Microphone: Ready'
-                  : 'Microphone: Auto-verify on connect'}
+                  : 'Microphone: Required before launch'}
               </span>
             </div>
 
@@ -246,25 +326,48 @@ export function ConnectSessionScreen({
         </div>
       </div>
 
-      {/* Optional: Include meeting sound selector */}
-      <div className="pt-1 pb-1">
-        <label className="flex items-start gap-2.5 px-3 py-2 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 cursor-pointer select-none hover:bg-slate-800/60 transition-colors">
+      {/* Live interviews require a separate interviewer/system-audio source. */}
+      {requiresMeetingAudio && <div className="pt-1 pb-1">
+        <label className={`flex items-start gap-2.5 px-3 py-2 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 select-none ${nativeMacPlatform ? 'cursor-default' : 'cursor-pointer hover:bg-slate-800/60 transition-colors'}`}>
           <input
             type="checkbox"
             checked={includeMeetingAudio}
-            onChange={(e) => setIncludeMeetingAudio(e.target.checked)}
-            className="w-3.5 h-3.5 mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer accent-emerald-500"
+            disabled={selectingSharedAudio || nativeMacPlatform}
+            onChange={(e) => handleIncludeMeetingAudioChange(e.target.checked)}
+            className="w-3.5 h-3.5 mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer accent-emerald-500 disabled:cursor-not-allowed"
           />
           <div className="flex flex-col text-left">
             <span className="font-semibold text-white text-[11px]">
-              Select Computer Audio Loopback Now
+              {nativeMacPlatform ? 'Required: Computer Audio' : 'Select Required Computer Audio'}
             </span>
             <span className="text-[10px] text-slate-500">
-              Leave unchecked to start with mic only. You can toggle system audio anytime in the session.
+              {selectingSharedAudio
+                ? 'Choose a display or meeting window and enable Share audio…'
+                : nativeMacPlatform
+                  ? 'We verify screen and system-audio access before opening the session.'
+                  : includeMeetingAudio
+                    ? sharedAudioStreamRef.current?.getAudioTracks().some((track) => track.readyState === 'live')
+                      ? 'Computer audio selected. This source is required for live sessions.'
+                      : 'Select a source and enable Share audio in the picker.'
+                    : 'Select a display or meeting window and enable Share audio. Windows asks you to select a source each session.'}
             </span>
           </div>
         </label>
-      </div>
+        {sharedAudioSelectionError && (
+          <div className="px-3 pt-1 text-[10px] text-amber-300" role="status">
+            <p>{sharedAudioSelectionError}</p>
+            {nativeMacPlatform && (
+              <button
+                type="button"
+                onClick={() => void openPrivacySettings('screen')}
+                className="mt-1 underline underline-offset-2 hover:text-amber-200 cursor-pointer"
+              >
+                Open Screen & System Audio Settings
+              </button>
+            )}
+          </div>
+        )}
+      </div>}
 
       {/* 3. Bottom Action Buttons: Back & Connect */}
       <div className="space-y-2 pt-2">
@@ -277,15 +380,16 @@ export function ConnectSessionScreen({
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            disabled={checkingAudio || selectingSharedAudio}
             onClick={onBack}
-            className="py-2.5 px-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-xl text-xs text-center transition-all cursor-pointer"
+            className="py-2.5 px-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-xl text-xs text-center transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           >
             Back
           </button>
 
           <button
             type="button"
-            disabled={checkingAudio}
+            disabled={checkingAudio || selectingSharedAudio || (requiresMeetingAudio && (!includeMeetingAudio || (!nativeMacPlatform && !sharedAudioStreamRef.current?.getAudioTracks().some((track) => track.readyState === 'live' && track.enabled))))}
             onClick={handleConnectClick}
             className="flex-1 py-2.5 px-4 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950"
           >
@@ -302,7 +406,7 @@ export function ConnectSessionScreen({
             ) : (
               <>
                 <Upload className="w-4 h-4 stroke-[2.4]" />
-                <span>Launch Stealth HUD</span>
+                <span>{sharedAudioSelectionError ? 'Retry Permission Check' : 'Launch Stealth HUD'}</span>
               </>
             )}
           </button>
@@ -316,11 +420,36 @@ export function ConnectSessionScreen({
         onClose={() => setShowPermissionModal(false)}
         onPermissionGranted={(grantedStream) => {
           setShowPermissionModal(false);
-          onConnect(grantedStream || null);
+          if (permissionType === 'mic') {
+            // Resume the complete preflight after microphone permission is
+            // granted instead of entering a live session directly.
+            void handleConnectClick();
+            return;
+          }
+          if (permissionType === 'share_audio') {
+            if (grantedStream) {
+              sharedAudioStreamRef.current = grantedStream;
+              setIncludeMeetingAudio(true);
+              setSharedAudioSelectionError(null);
+            }
+            return;
+          }
+          const sharedStream = grantedStream || sharedAudioStreamRef.current;
+          sharedAudioStreamRef.current = null;
+          onConnect(sharedStream || null, includeMeetingAudio && nativeMacPlatform);
         }}
         onProceedMicOnly={() => {
           setShowPermissionModal(false);
-          onConnect(null);
+          if (permissionType === 'share_audio') {
+            setIncludeMeetingAudio(false);
+            setSharedAudioSelectionError(null);
+            sharedAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+            sharedAudioStreamRef.current = null;
+            return;
+          }
+          sharedAudioStreamRef.current?.getTracks().forEach((track) => track.stop());
+          sharedAudioStreamRef.current = null;
+          onConnect(null, includeMeetingAudio && nativeMacPlatform);
         }}
       />
     </div>

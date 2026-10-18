@@ -33,6 +33,7 @@ interface InterviewHUDProps {
   sessionId?: string | null;
   language?: string;
   initialSharedStream?: MediaStream | null;
+  startSharedAudioOnConnect?: boolean;
   onLogout?: () => void;
   onBackToMenu?: () => void;
   onOpenScreenPosition?: () => void;
@@ -46,6 +47,7 @@ export function InterviewHUD({
   sessionId,
   language = "English",
   initialSharedStream,
+  startSharedAudioOnConnect = false,
   onLogout,
   onBackToMenu,
   onOpenScreenPosition,
@@ -147,6 +149,7 @@ export function InterviewHUD({
     wsUrl: WS_URL,
     sessionId,
     initialSharedStream,
+    startSharedAudioOnConnect,
     autoAnswer,
   });
 
