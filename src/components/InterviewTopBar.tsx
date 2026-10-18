@@ -41,6 +41,7 @@ interface InterviewTopBarProps {
   isMicActive?: boolean;
   onToggleMic?: () => void;
   isSharedAudioActive?: boolean;
+  sharedAudioError?: string | null;
   onToggleSharedAudio?: () => void;
   micError?: string | null;
   onEnableMic?: () => void;
@@ -114,6 +115,7 @@ function InterviewTopBarComponent({
   isMicActive = true,
   onToggleMic,
   isSharedAudioActive = false,
+  sharedAudioError,
   onToggleSharedAudio,
   micError,
   onEnableMic,
@@ -178,7 +180,9 @@ function InterviewTopBarComponent({
         {/* 1. Shared Audio Button: Start/Stop listening to shared computer/meeting audio */}
         <Tooltip
           content={
-            isSharedAudioActive
+            sharedAudioError
+              ? `Screen/audio permission issue: ${sharedAudioError}`
+              : isSharedAudioActive
               ? 'Shared Audio: Listening live (Click to stop)'
               : 'Shared Audio: Stopped (Click to share audio)'
           }

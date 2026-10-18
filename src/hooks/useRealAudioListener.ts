@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { floatTo16BitPCM, resampleTo16kHz } from '../utils/pcmEncoder';
-import { captureScreen } from '../utils/windowManager';
+import { captureScreen, checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
 import { getOrCreateDeviceId } from '../utils/device';
 
@@ -50,6 +50,7 @@ export function useRealAudioListener({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const [sharedAudioError, setSharedAudioError] = useState<string | null>(null);
 
   const [transcriptList, setTranscriptList] = useState<TranscriptItem[]>([]);
   const [interimText, setInterimText] = useState<string>('');
@@ -664,6 +665,15 @@ export function useRealAudioListener({
   const startSharedAudio = useCallback(async () => {
     try {
       console.log('[RealAudio] Requesting shared audio stream...');
+      const permissions = await checkSystemPermissions();
+      if (!permissions.screen_capture) {
+        const granted = await requestScreenCaptureAccess();
+        if (!granted) {
+          setSharedAudioError('Enable Screen & System Audio Recording for Ghostove Desktop, then quit and reopen Ghostove.');
+          return;
+        }
+      }
+
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: {
@@ -685,9 +695,18 @@ export function useRealAudioListener({
       displayStream.getVideoTracks().forEach((t) => t.stop());
 
       const audioStream = new MediaStream(audioTracks);
+      setSharedAudioError(null);
       attachSharedStream(audioStream);
     } catch (err: any) {
       console.warn('[RealAudio] Screen audio capture cancelled or failed:', err);
+      const permissions = await checkSystemPermissions();
+      setSharedAudioError(
+        !permissions.screen_capture
+          ? 'Enable Screen & System Audio Recording for Ghostove Desktop, quit and reopen Ghostove, then retry.'
+          : err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+            ? 'The macOS screen picker was dismissed. Retry and choose a display or meeting window with Share audio enabled.'
+            : err.message || 'Could not start shared audio.'
+      );
       setIsSharedAudioActive(false);
     }
   }, [attachSharedStream]);
@@ -1089,6 +1108,7 @@ export function useRealAudioListener({
   return {
     isMicActive,
     isSharedAudioActive,
+    sharedAudioError,
     isBackendConnected,
     isSpeaking,
     volumeLevel,

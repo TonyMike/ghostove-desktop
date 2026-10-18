@@ -114,6 +114,7 @@ export function InterviewHUD({
   const {
     isMicActive,
     isSharedAudioActive,
+    sharedAudioError,
     isBackendConnected,
     toggleMic,
     toggleSharedAudio,
@@ -529,6 +530,7 @@ export function InterviewHUD({
           isMicActive={isMicActive}
           onToggleMic={toggleMic}
           isSharedAudioActive={isSharedAudioActive}
+          sharedAudioError={sharedAudioError}
           onToggleSharedAudio={toggleSharedAudio}
           micError={micError}
           onEnableMic={handleEnableMic}

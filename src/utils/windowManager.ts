@@ -200,3 +200,9 @@ export async function checkSystemPermissions(): Promise<SystemPermissions> {
   };
 }
 
+/** Ask macOS to register Ghostove for screen-recording access before sharing. */
+export async function requestScreenCaptureAccess(): Promise<boolean> {
+  const granted = await safeInvoke<boolean>('request_screen_capture_access');
+  return granted === true;
+}
+

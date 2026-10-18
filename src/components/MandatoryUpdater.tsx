@@ -22,7 +22,7 @@ export function MandatoryUpdater({ deferWhileSessionActive }: MandatoryUpdaterPr
   const [error, setError] = useState<string | null>(null);
 
   const checkForUpdate = useCallback(async () => {
-    if (!isTauri() || checkInProgressRef.current || updateRef.current) return;
+    if (import.meta.env.DEV || !isTauri() || checkInProgressRef.current || updateRef.current) return;
 
     checkInProgressRef.current = true;
     try {
@@ -41,7 +41,7 @@ export function MandatoryUpdater({ deferWhileSessionActive }: MandatoryUpdaterPr
   }, []);
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (import.meta.env.DEV || !isTauri()) return;
 
     void checkForUpdate();
     const intervalId = window.setInterval(() => void checkForUpdate(), UPDATE_CHECK_INTERVAL_MS);
@@ -70,6 +70,10 @@ export function MandatoryUpdater({ deferWhileSessionActive }: MandatoryUpdaterPr
     document.addEventListener('keydown', keepFocusInsideDialog, true);
     return () => document.removeEventListener('keydown', keepFocusInsideDialog, true);
   }, [deferWhileSessionActive, installing, updateVersion]);
+
+  // Development builds use the local Vite app and must never install releases
+  // from the production updater feed.
+  if (import.meta.env.DEV) return null;
 
   const handleInstall = async () => {
     const update = updateRef.current;

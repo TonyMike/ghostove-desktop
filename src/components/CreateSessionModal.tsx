@@ -97,14 +97,14 @@ export function CreateSessionModal({
       const headers: Record<string, string> = {};
       if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
-      const response = await fetch(`${WEB_API_URL}/api/interview-models`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/interview-models`, {
         headers,
         cache: 'no-store',
         signal,
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data?.error || `Could not load active interview models (${response.status}).`);
+        throw new Error(data?.error || data?.detail || `Could not load active interview models (${response.status}).`);
       }
 
       const models = Array.isArray(data?.models)

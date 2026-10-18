@@ -11,6 +11,7 @@ import {
   Monitor
 } from 'lucide-react';
 import macGuideImg from '../assets/mac-permission-guide.png';
+import { checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
 
 interface AudioPermissionModalProps {
   isOpen: boolean;
@@ -59,6 +60,16 @@ export function AudioPermissionModal({
 
     if (isShareAudio) {
       try {
+        const permissions = await checkSystemPermissions();
+        if (!permissions.screen_capture) {
+          const granted = await requestScreenCaptureAccess();
+          if (!granted) {
+            setTesting(false);
+            setErrorMsg('macOS has not granted screen recording to this running app yet. Turn on Ghostove Desktop in System Settings, quit Ghostove completely, then reopen it and try again.');
+            return;
+          }
+        }
+
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: {
@@ -85,10 +96,13 @@ export function AudioPermissionModal({
       } catch (err: any) {
         console.warn('[Ghostove] Re-testing share audio failed:', err);
         setTesting(false);
+        const permissions = await checkSystemPermissions();
         setErrorMsg(
-          err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-            ? 'Screen & Audio sharing permission was denied or cancelled. Please enable it in system settings or retry.'
-            : err.message || 'System audio access could not be acquired.'
+          !permissions.screen_capture
+            ? 'macOS still reports screen recording as disabled. Turn on Ghostove Desktop in System Settings, quit Ghostove completely, then reopen it and try again.'
+            : err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+              ? 'The macOS screen picker was dismissed. Try again and select a display or meeting window, then enable Share audio.'
+              : err.message || 'System audio access could not be acquired.'
         );
       }
       return;
@@ -215,9 +229,20 @@ export function AudioPermissionModal({
                   </span>
                 </div>
 
+                {isShareAudio && (
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      If Ghostove was already open, quit and reopen it after enabling access so macOS applies the permission.
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-2">
                   <span className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                    3
+                    {isShareAudio ? '4' : '3'}
                   </span>
                   <span>
                     When the picker dialog opens, select your meeting window or browser tab and check <strong>&quot;Share audio&quot;</strong>.

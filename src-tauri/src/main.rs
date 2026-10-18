@@ -1002,6 +1002,7 @@ pub struct SystemPermissions {
 fn check_system_permissions() -> Result<SystemPermissions, String> {
     #[cfg(target_os = "macos")]
     {
+        #[link(name = "CoreGraphics", kind = "framework")]
         extern "C" {
             fn CGPreflightScreenCaptureAccess() -> bool;
         }
@@ -1037,6 +1038,22 @@ fn check_system_permissions() -> Result<SystemPermissions, String> {
             microphone: true,
             screen_capture: true,
         })
+    }
+}
+
+#[tauri::command]
+fn request_screen_capture_access() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGRequestScreenCaptureAccess() -> bool;
+        }
+        return unsafe { CGRequestScreenCaptureAccess() };
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
     }
 }
 
@@ -1078,6 +1095,7 @@ fn main() {
             start_dragging_window,
             capture_screen,
             check_system_permissions,
+            request_screen_capture_access,
             dev_pairing::take_dev_pairing_token
         ])
         .setup(|app| {

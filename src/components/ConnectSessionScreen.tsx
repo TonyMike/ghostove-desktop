@@ -14,7 +14,7 @@ import {
 import { openBrowserUrl } from '../utils/browser';
 import { SessionItem } from './SessionSelectScreen';
 import { AudioPermissionModal } from './AudioPermissionModal';
-import { checkSystemPermissions } from '../utils/windowManager';
+import { checkSystemPermissions, requestScreenCaptureAccess } from '../utils/windowManager';
 import type { SystemPermissions } from '../utils/windowManager';
 
 interface ConnectSessionScreenProps {
@@ -107,6 +107,16 @@ export function ConnectSessionScreen({
 
     // 2. If user explicitly opted to include meeting / tab audio right away
     if (includeMeetingAudio) {
+      if (!perms.screen_capture) {
+        const granted = await requestScreenCaptureAccess();
+        if (!granted) {
+          setCheckingAudio(false);
+          setPermissionType('share_audio');
+          setShowPermissionModal(true);
+          return;
+        }
+      }
+
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -132,7 +142,12 @@ export function ConnectSessionScreen({
         console.info('[Ghostove] Meeting audio picker dismissed or cancelled:', err);
         // If the user cancelled the picker dialog, do NOT show the error modal.
         // Only if it's a hard permission failure and screen capture is disabled:
-        if (err.name === 'PermissionDeniedError' && !perms.screen_capture) {
+        const refreshedPermissions = await checkSystemPermissions();
+        setSystemPermissions(refreshedPermissions);
+        if (
+          (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') &&
+          !refreshedPermissions.screen_capture
+        ) {
           setCheckingAudio(false);
           setPermissionType('share_audio');
           setShowPermissionModal(true);
