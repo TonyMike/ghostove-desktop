@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { floatTo16BitPCM, resampleTo16kHz } from '../utils/pcmEncoder';
 import { captureScreen } from '../utils/windowManager';
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
+import { getOrCreateDeviceId } from '../utils/device';
 
 export interface TranscriptItem {
   id: string;
@@ -799,14 +800,7 @@ export function useRealAudioListener({
       }
 
       try {
-        let deviceId = '';
-        if (typeof window !== 'undefined') {
-          deviceId = localStorage.getItem('ghostove_device_id') || '';
-          if (!deviceId) {
-            deviceId = 'hud_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-            localStorage.setItem('ghostove_device_id', deviceId);
-          }
-        }
+        const deviceId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
         const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('mac');
         const deviceOs = isMac ? 'macos' : 'windows';
         const deviceName = `${isMac ? 'Apple Mac' : 'Windows PC'} Stealth HUD`;
@@ -1015,6 +1009,9 @@ export function useRealAudioListener({
             } else if (data.type === 'error' && data.code === 'device_limit_exceeded') {
               console.error('[RealAudio WS] Device limit exceeded');
               setFullAnswer('🚫 ' + (data.message || 'Device limit exceeded (max 3 devices). Revoke an unused device in your web dashboard.'));
+            } else if (data.type === 'error' && ['device_not_paired', 'device_session_revoked', 'desktop_session_invalid'].includes(data.code)) {
+              console.warn('[RealAudio WS] Desktop pairing is no longer valid.');
+              setFullAnswer('🔒 ' + (data.message || 'This desktop was signed out. Sign out of the desktop app, then pair it again from Ghostove Web.'));
             }
           } catch (_) {}
         };
@@ -1025,7 +1022,7 @@ export function useRealAudioListener({
             setIsBackendConnected(false);
             console.log(`[RealAudio WS] Disconnected (code: ${event.code}).`);
             // Do not reconnect automatically if blocked by security lock or quota
-            if (event.code === 4001 || event.code === 4002 || event.code === 4003) {
+            if (event.code === 4001 || event.code === 4002 || event.code === 4003 || event.code === 4401) {
               console.warn(`[RealAudio WS] Connection stopped permanently due to code ${event.code}.`);
               return;
             }

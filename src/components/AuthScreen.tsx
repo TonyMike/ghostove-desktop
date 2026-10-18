@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ExternalLink, ShieldCheck, Loader2 } from 'lucide-react';
 import { TopBar } from './TopBar';
 import { WEB_API_URL } from '../utils/config';
+import { getOrCreateDeviceId } from '../utils/device';
 
 interface AuthScreenProps {
   onManualTokenSubmit?: (token: string) => void;
@@ -18,10 +19,14 @@ export function AuthScreen({
   const handleOpenBrowser = async () => {
     setIsOpeningBrowser(true);
     try {
+      const pairingUrl = new URL(webAuthUrl);
+      pairingUrl.searchParams.set('deviceId', getOrCreateDeviceId());
       const { open } = await import('@tauri-apps/plugin-shell');
-      await open(webAuthUrl);
+      await open(pairingUrl.toString());
     } catch {
-      window.open(webAuthUrl, '_blank');
+      const pairingUrl = new URL(webAuthUrl);
+      pairingUrl.searchParams.set('deviceId', getOrCreateDeviceId());
+      window.open(pairingUrl.toString(), '_blank');
     } finally {
       setTimeout(() => setIsOpeningBrowser(false), 2000);
     }
