@@ -328,7 +328,7 @@ export function useRealAudioListener({
 
   // Capture the screen and answer its most relevant visible question or issue.
   const analyzeScreenshot = useCallback(
-    async (targetLanguage: string = 'Python', customBase64?: string): Promise<boolean> => {
+    async (targetLanguage?: string, customBase64?: string): Promise<boolean> => {
       try {
         let imageB64 = customBase64;
         if (!imageB64) {
@@ -364,13 +364,12 @@ export function useRealAudioListener({
           return false;
         }
 
-        ws.send(
-          JSON.stringify({
-            type: 'read_screen',
-            image_base64: imageB64,
-            target_language: targetLanguage,
-          })
-        );
+        const request: Record<string, string> = {
+          type: 'read_screen',
+          image_base64: imageB64,
+        };
+        if (targetLanguage?.trim()) request.target_language = targetLanguage.trim();
+        ws.send(JSON.stringify(request));
         return true;
       } catch (err) {
         console.error('[RealAudio] Error in analyzeScreenshot:', err);
@@ -1146,13 +1145,12 @@ export function useRealAudioListener({
     };
   }, [token, wsUrl, sessionId, selectedLanguage, appendFinalTranscript, quotaRefreshKey]);
 
-  // 12. Auto-start real audio on mount
+  // Keep the candidate mic off until the user explicitly enables it.
   useEffect(() => {
-    startRealAudio();
     return () => {
       stopRealAudio();
     };
-  }, [startRealAudio, stopRealAudio]);
+  }, [stopRealAudio]);
 
   // 13. Automatically attach pre-connected shared meeting audio stream
   useEffect(() => {

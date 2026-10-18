@@ -1,9 +1,9 @@
 import React, {
   useState,
-  useRef,
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import { InterviewTopBar } from "./InterviewTopBar";
 import { EndSessionDialog } from "./common/EndSessionDialog";
@@ -66,7 +66,9 @@ export function InterviewHUD({
   const [localCollapsed, setLocalCollapsed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
-  const [quotaRefreshFeedback, setQuotaRefreshFeedback] = useState<string | null>(null);
+  const [quotaRefreshFeedback, setQuotaRefreshFeedback] = useState<
+    string | null
+  >(null);
 
   // Decode authenticated user email from JWT token payload
   const userEmail = useMemo(() => {
@@ -93,8 +95,6 @@ export function InterviewHUD({
     : localCollapsed;
   const toggleCollapse =
     externalToggleCollapse || (() => setLocalCollapsed(!localCollapsed));
-
-  const floatingToggleRef = useRef<HTMLButtonElement>(null);
 
   // Resize window to generous dimensions (1080 x 740) so the interview panel is large with zero horizontal scroll
   useEffect(() => {
@@ -155,13 +155,13 @@ export function InterviewHUD({
 
   useEffect(() => {
     const refreshWhenAppReturns = () => {
-      if (document.visibilityState === 'visible') void refreshQuota();
+      if (document.visibilityState === "visible") void refreshQuota();
     };
-    window.addEventListener('focus', refreshWhenAppReturns);
-    document.addEventListener('visibilitychange', refreshWhenAppReturns);
+    window.addEventListener("focus", refreshWhenAppReturns);
+    document.addEventListener("visibilitychange", refreshWhenAppReturns);
     return () => {
-      window.removeEventListener('focus', refreshWhenAppReturns);
-      document.removeEventListener('visibilitychange', refreshWhenAppReturns);
+      window.removeEventListener("focus", refreshWhenAppReturns);
+      document.removeEventListener("visibilitychange", refreshWhenAppReturns);
     };
   }, [refreshQuota]);
 
@@ -169,9 +169,13 @@ export function InterviewHUD({
     setQuotaRefreshFeedback(null);
     const refreshedSeconds = await refreshQuota();
     if (refreshedSeconds === null) {
-      setQuotaRefreshFeedback('Could not check your balance. Check your connection and try again.');
+      setQuotaRefreshFeedback(
+        "Could not check your balance. Check your connection and try again.",
+      );
     } else if (refreshedSeconds <= 0) {
-      setQuotaRefreshFeedback('No additional time is available yet. Complete a time purchase or choose a plan, then check again.');
+      setQuotaRefreshFeedback(
+        "No additional time is available yet. Complete a time purchase or choose a plan, then check again.",
+      );
     }
   };
 
@@ -202,9 +206,11 @@ export function InterviewHUD({
   const handleScreenshot = useCallback(async () => {
     setShowAnswer(true);
     showToast("📸 Capturing screen and checking for a question or issue...");
-    const ok = await analyzeScreenshot("Python");
+    const ok = await analyzeScreenshot();
     if (!ok) {
-      showToast("⚠️ Screenshot could not be analyzed. See the answer panel for details.");
+      showToast(
+        "⚠️ Screenshot could not be analyzed. See the answer panel for details.",
+      );
     }
   }, [analyzeScreenshot, showToast]);
 
@@ -299,8 +305,14 @@ export function InterviewHUD({
     onBackToMenu,
   ]);
 
-  const requestEndSession = useCallback(() => setShowEndSessionDialog(true), []);
-  const cancelEndSession = useCallback(() => setShowEndSessionDialog(false), []);
+  const requestEndSession = useCallback(
+    () => setShowEndSessionDialog(true),
+    [],
+  );
+  const cancelEndSession = useCallback(
+    () => setShowEndSessionDialog(false),
+    [],
+  );
   const confirmEndSession = useCallback(() => {
     setShowEndSessionDialog(false);
     void handleEndSession();
@@ -395,35 +407,60 @@ export function InterviewHUD({
     toggleMic,
   ]);
 
-  // Click-through helper
-  const handleToggleClickThrough = async () => {
+  const hitRegionFrameRef = useRef<number | null>(null);
+  const updateClickThroughRegions = useCallback(
+    (clickThroughOnly: boolean, control?: HTMLElement) => {
+      if (hitRegionFrameRef.current !== null) {
+        cancelAnimationFrame(hitRegionFrameRef.current);
+      }
+      hitRegionFrameRef.current = requestAnimationFrame(() => {
+        hitRegionFrameRef.current = null;
+        const targets = clickThroughOnly
+          ? [control ?? document.querySelector<HTMLElement>("[data-click-through-toggle]")]
+          : Array.from(document.querySelectorAll<HTMLElement>("[data-hud-hit-region]"));
+        const rects: ClickableRect[] = targets.flatMap((element) => {
+          if (!element?.isConnected) return [];
+          const bounds = element.getBoundingClientRect();
+          const left = Math.max(0, bounds.left);
+          const top = Math.max(0, bounds.top);
+          const right = Math.min(window.innerWidth, bounds.right);
+          const bottom = Math.min(window.innerHeight, bounds.bottom);
+          if (right <= left || bottom <= top) return [];
+          return [{ x: left, y: top, width: right - left, height: bottom - top }];
+        });
+        void setSelectiveClickThrough(true, rects);
+      });
+    },
+    [],
+  );
+
+  const handleToggleClickThrough = (control?: HTMLElement) => {
     const nextState = !isClickThrough;
     setIsClickThrough(nextState);
-
-    if (!nextState) {
-      await setSelectiveClickThrough(false, []);
-      return;
-    }
-
-    setTimeout(async () => {
-      const rects: ClickableRect[] = [];
-      const padding = 16;
-      if (floatingToggleRef.current) {
-        const r = floatingToggleRef.current.getBoundingClientRect();
-        rects.push({
-          x: Math.max(0, r.left - padding),
-          y: Math.max(0, r.top - padding),
-          width: r.width + padding * 2,
-          height: r.height + padding * 2,
-        });
-      }
-      await setSelectiveClickThrough(true, rects);
-    }, 60);
+    updateClickThroughRegions(nextState, control);
   };
+
+  // Pass clicks through transparent margins while keeping visible HUD regions usable.
+  useEffect(() => {
+    const refreshHitRegions = () => updateClickThroughRegions(isClickThrough);
+    refreshHitRegions();
+    const root = document.querySelector("#root");
+    const mutationObserver = root ? new MutationObserver(refreshHitRegions) : null;
+    if (root) mutationObserver?.observe(root, { childList: true, subtree: true });
+    window.addEventListener("resize", refreshHitRegions);
+
+    return () => {
+      mutationObserver?.disconnect();
+      window.removeEventListener("resize", refreshHitRegions);
+    };
+  }, [isClickThrough, isCollapsed, zoomLevel, fontSizeLevel, updateClickThroughRegions]);
 
   // Reset click-through on unmount
   useEffect(() => {
     return () => {
+      if (hitRegionFrameRef.current !== null) {
+        cancelAnimationFrame(hitRegionFrameRef.current);
+      }
       setSelectiveClickThrough(false, []);
     };
   }, []);
@@ -445,41 +482,29 @@ export function InterviewHUD({
         </div>
       )}
 
-      {/* Floating Click-Through Override Button */}
-      {isClickThrough && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50">
-          <button
-            ref={floatingToggleRef}
-            onClick={handleToggleClickThrough}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 border-2 border-amber-200 cursor-pointer pointer-events-auto transition-transform hover:scale-105 animate-pulse"
-            title="Click to turn off click-through"
-          >
-            <MousePointer className="w-3.5 h-3.5" />
-            <span>Click-Through ON — Click to Disable</span>
-          </button>
-        </div>
-      )}
-
       {/* Quota Exhausted Modal Alert */}
       {quotaExhausted && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in pointer-events-auto">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in pointer-events-auto" data-hud-hit-region>
           <div className="bg-slate-950/95 border border-rose-500/30 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-[0_25px_60px_-15px_rgba(0,0,0,0.98),0_0_30px_rgba(244,63,94,0.15)] text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto shadow-md">
               <ShieldAlert className="w-6 h-6" />
             </div>
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-white tracking-tight">
-                {quotaExhausted.reason === 'daily_cap_reached' ? 'Today’s Time Limit Reached' : 'You’re Out of Session Time'}
+                {quotaExhausted.reason === "daily_cap_reached"
+                  ? "Today’s Time Limit Reached"
+                  : "You’re Out of Session Time"}
               </h3>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                {quotaExhausted.message || 'Your session time is used. Add more time to continue receiving real-time answers.'}
+                {quotaExhausted.message ||
+                  "Your session time is used. Add more time to continue receiving real-time answers."}
               </p>
             </div>
             <div className="space-y-2 pt-2">
               <button
                 onClick={() => {
                   setQuotaRefreshFeedback(null);
-                  if (quotaExhausted.reason === 'daily_cap_reached') {
+                  if (quotaExhausted.reason === "daily_cap_reached") {
                     void openBrowserUrl(`${WEB_API_URL}/dashboard`);
                   } else if (onGetMoreTimeOrPlan) {
                     onGetMoreTimeOrPlan();
@@ -490,10 +515,14 @@ export function InterviewHUD({
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
               >
                 <Zap className="w-4 h-4 fill-slate-950" />
-                <span>{quotaExhausted.reason === 'daily_cap_reached' ? 'View Dashboard' : 'Add time or choose a plan'}</span>
+                <span>
+                  {quotaExhausted.reason === "daily_cap_reached"
+                    ? "View Dashboard"
+                    : "Add time or choose a plan"}
+                </span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
-              {quotaExhausted.reason !== 'daily_cap_reached' && (
+              {quotaExhausted.reason !== "daily_cap_reached" && (
                 <button
                   onClick={() => void handleRefreshQuota()}
                   className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs cursor-pointer border border-slate-700 transition-colors"
@@ -502,7 +531,9 @@ export function InterviewHUD({
                 </button>
               )}
               {quotaRefreshFeedback && (
-                <p role="status" className="px-2 text-xs text-amber-200">{quotaRefreshFeedback}</p>
+                <p role="status" className="px-2 text-xs text-amber-200">
+                  {quotaRefreshFeedback}
+                </p>
               )}
               <button
                 onClick={requestEndSession}
@@ -521,7 +552,7 @@ export function InterviewHUD({
         onCancel={cancelEndSession}
         onConfirm={confirmEndSession}
       />
-      <div className="w-full max-w-[1040px] mb-3 shrink-0 relative z-50">
+      <div className="w-full max-w-[1040px] mb-3 shrink-0 relative z-50" data-hud-hit-region>
         <InterviewTopBar
           showAnswer={showAnswer}
           onToggleAnswer={handleToggleAnswer}
@@ -558,29 +589,40 @@ export function InterviewHUD({
         />
       </div>
 
-      {!isCollapsed && remainingSeconds !== null && remainingSeconds > 0 && remainingSeconds <= 300 && (
-        <div className={`w-full max-w-[1040px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
-          remainingSeconds <= 60
-            ? 'border-rose-400/30 bg-rose-950/70 text-rose-100'
-            : 'border-amber-400/30 bg-amber-950/60 text-amber-100'
-        }`} role="status" aria-live="polite">
-          <p className="text-xs leading-relaxed">
-            {remainingSeconds < 60
-              ? 'Less than a minute of session time remains.'
-              : remainingSeconds <= 120
-                ? 'About two minutes of session time remain.'
-                : 'Five minutes or less of session time remain.'}
-            {' '}Your balance is shown in the top bar.
-          </p>
-          <button
-            type="button"
-            onClick={onGetMoreTimeOrPlan || (() => void openBrowserUrl(`${WEB_API_URL}/#pricing`))}
-            className="shrink-0 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-300"
+      {!isCollapsed &&
+        remainingSeconds !== null &&
+        remainingSeconds > 0 &&
+        remainingSeconds <= 300 && (
+          <div
+            className={`w-full max-w-[1040px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
+              remainingSeconds <= 60
+                ? "border-rose-400/30 bg-rose-950/70 text-rose-100"
+                : "border-amber-400/30 bg-amber-950/60 text-amber-100"
+            }`}
+            data-hud-hit-region
+            role="status"
+            aria-live="polite"
           >
-            Add time or choose a plan
-          </button>
-        </div>
-      )}
+            <p className="text-xs leading-relaxed">
+              {remainingSeconds < 60
+                ? "Less than a minute of session time remains."
+                : remainingSeconds <= 120
+                  ? "About two minutes of session time remain."
+                  : "Five minutes or less of session time remain."}{" "}
+              Your balance is shown in the top bar.
+            </p>
+            <button
+              type="button"
+              onClick={
+                onGetMoreTimeOrPlan ||
+                (() => void openBrowserUrl(`${WEB_API_URL}/#pricing`))
+              }
+              className="shrink-0 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              Add time or choose a plan
+            </button>
+          </div>
+        )}
 
       {/* 2. Main Content Panels Container (Side-by-Side) */}
       {!isCollapsed && (

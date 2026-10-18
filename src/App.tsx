@@ -389,7 +389,7 @@ function AppContent() {
             />
           )}
           {showScreenPosition && (
-            <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center">
+            <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center" data-hud-hit-region>
               <div className="relative w-[440px] h-[600px] bg-[#f4f4f0] dark:bg-slate-900 overflow-hidden">
                 <ScreenPositionPopover
                   isOpen={showScreenPosition}

@@ -346,6 +346,7 @@ function CodeBlockCard({ code, language }: { code: string; language: string }) {
 
   return (
     <div
+      data-hud-hit-region
       className={`bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-none backdrop-blur-2xl p-4 flex flex-col justify-between text-white transition-all duration-200 ${
         isExpanded ? 'h-[640px]' : 'min-h-[480px] max-h-[620px]'
       }`}

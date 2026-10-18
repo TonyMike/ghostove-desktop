@@ -59,6 +59,16 @@ export function ConnectSessionScreen({
     sharedAudioStreamRef.current = null;
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    checkSystemPermissions().then((permissions) => {
+      if (isMounted) setSystemPermissions(permissions);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleIncludeMeetingAudioChange = (checked: boolean) => {
     setSharedAudioSelectionError(null);
     if (nativeMacPlatform) {
@@ -97,7 +107,6 @@ export function ConnectSessionScreen({
       console.warn('[Ghostove] Computer audio selection failed:', error);
       setIncludeMeetingAudio(false);
       const permissions = await checkSystemPermissions();
-      setSystemPermissions(permissions);
       if (!permissions.screen_capture) {
         setShowPermissionModal(true);
         setSharedAudioSelectionError('macOS has not granted screen recording to Ghostove Desktop. Enable it in System Settings and reopen Ghostove.');
@@ -110,19 +119,6 @@ export function ConnectSessionScreen({
       }
     }).finally(() => setSelectingSharedAudio(false));
   };
-
-  // Pre-flight check system permissions on screen load
-  useEffect(() => {
-    let isMounted = true;
-    checkSystemPermissions().then((perms) => {
-      if (isMounted) {
-        setSystemPermissions(perms);
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleOpenTutorial = () => {
     openBrowserUrl('https://www.youtube.com/results?search_query=ghostove+tutorial');
@@ -151,13 +147,9 @@ export function ConnectSessionScreen({
       }
     }
 
-    // 1. Verify candidate microphone access
-    const perms = await checkSystemPermissions();
-    setSystemPermissions(perms);
-
+    // Request microphone permission before the interview starts, but stop this
+    // preflight stream immediately. The HUD microphone stays off until opted in.
     try {
-      // Probe the actual WebView capture path on every platform; the native
-      // Windows permission status is not a reliable microphone grant check.
       const micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -167,8 +159,10 @@ export function ConnectSessionScreen({
         },
       });
       micStream.getTracks().forEach((track) => track.stop());
-    } catch (err) {
-      console.warn('[Ghostove] Microphone access check failed:', err);
+      const permissions = await checkSystemPermissions();
+      setSystemPermissions(permissions);
+    } catch (error) {
+      console.warn('[Ghostove] Microphone permission preflight failed:', error);
       setCheckingAudio(false);
       setPermissionType('mic');
       setShowPermissionModal(true);
@@ -189,7 +183,6 @@ export function ConnectSessionScreen({
       // is also required by on-demand screenshot analysis.
       const screenAccessGranted = await requestScreenCaptureAccess();
       const refreshedPermissions = await checkSystemPermissions();
-      setSystemPermissions(refreshedPermissions);
       if (!screenAccessGranted || !refreshedPermissions.screen_capture) {
         setSharedAudioSelectionError(
           'Screen & System Audio Recording access is required. Enable Ghostove Desktop in System Settings, then retry. macOS may require you to quit and reopen Ghostove after granting access.'
@@ -269,20 +262,22 @@ export function ConnectSessionScreen({
               </strong>
               {requiresMeetingAudio
                 ? nativeMacPlatform
-                  ? 'Allow microphone access for your candidate transcript and Screen & System Audio Recording for interviewer audio and screenshot analysis. You can mute the microphone after the session starts.'
-                  : 'Allow microphone access, then select a display or meeting window with Share audio enabled. These are required for live interviewer transcription and screenshot analysis.'
-                : 'Allow microphone access so your voice can be transcribed during mock practice. You can mute the microphone after the session starts.'}
+                  ? 'Allow microphone permission before launch; the candidate mic stays off until you turn it on. Screen & System Audio Recording is required for interviewer audio and screenshot analysis.'
+                  : 'Allow microphone permission before launch; the candidate mic stays off until you turn it on. Select a display or meeting window with Share audio enabled for interviewer transcription and screenshot analysis.'
+                : 'Allow microphone permission before launch; the candidate mic stays off until you turn it on during mock practice.'}
             </div>
           </div>
 
           {/* Real-time System Permission Status Badge */}
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
-            <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <div className={`flex items-center gap-1.5 font-medium ${nativeMacPlatform && systemPermissions?.microphone ? 'text-emerald-400' : 'text-slate-400'}`}>
+              {nativeMacPlatform && systemPermissions?.microphone
+                ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                : <Mic className="w-3.5 h-3.5 text-slate-400" />}
               <span>
                 {nativeMacPlatform && systemPermissions?.microphone
-                  ? 'Microphone: Ready'
-                  : 'Microphone: Required before launch'}
+                  ? 'Mic permission: Ready · mic off'
+                  : 'Mic permission: Requested before launch · mic off'}
               </span>
             </div>
 

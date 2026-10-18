@@ -29,6 +29,7 @@ export function EndSessionDialog({ isOpen, onCancel, onConfirm }: EndSessionDial
 
   return (
     <div
+      data-hud-hit-region
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCancel();

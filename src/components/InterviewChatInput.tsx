@@ -37,7 +37,7 @@ export function InterviewChatInput({ isOpen, onClose, onSubmit }: InterviewChatI
   };
 
   return (
-    <div className="bg-[#1a1b20]/95 border border-white/15 rounded-2xl p-2.5 shadow-none backdrop-blur-xl animate-fade-in text-white mb-2">
+    <div data-hud-hit-region className="bg-[#1a1b20]/95 border border-white/15 rounded-2xl p-2.5 shadow-none backdrop-blur-xl animate-fade-in text-white mb-2">
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
         <input
           ref={inputRef}

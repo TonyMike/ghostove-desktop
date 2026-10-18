@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface TooltipProps {
   content: string;
   shortcut?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
+  align?: 'start' | 'center' | 'end';
   delayMs?: number;
   children: React.ReactNode;
   className?: string;
@@ -15,6 +16,7 @@ export function Tooltip({
   content,
   shortcut,
   position = 'bottom',
+  align = 'center',
   delayMs = 120,
   children,
   className = '',
@@ -24,6 +26,7 @@ export function Tooltip({
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const timerRef = useRef<any>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const updateCoordinates = () => {
     if (!triggerRef.current) return;
@@ -34,11 +37,11 @@ export function Tooltip({
     switch (position) {
       case 'top':
         top = rect.top - 8;
-        left = rect.left + rect.width / 2;
+        left = align === 'start' ? rect.left : align === 'end' ? rect.right : rect.left + rect.width / 2;
         break;
       case 'bottom':
         top = rect.bottom + 8;
-        left = rect.left + rect.width / 2;
+        left = align === 'start' ? rect.left : align === 'end' ? rect.right : rect.left + rect.width / 2;
         break;
       case 'left':
         top = rect.top + rect.height / 2;
@@ -73,6 +76,26 @@ export function Tooltip({
     setIsVisible(false);
   };
 
+  // Keep every tooltip within the WebView, including long messages near an edge.
+  useLayoutEffect(() => {
+    const tooltip = tooltipRef.current;
+    if (!isVisible || !coords || !tooltip) return;
+
+    const rect = tooltip.getBoundingClientRect();
+    const margin = 8;
+    const clampOffset = (start: number, size: number, viewportSize: number) => {
+      const maxStart = Math.max(margin, viewportSize - margin - size);
+      return Math.min(Math.max(start, margin), maxStart) - start;
+    };
+    const shiftX = clampOffset(rect.left, rect.width, window.innerWidth);
+    const shiftY = clampOffset(rect.top, rect.height, window.innerHeight);
+
+    if (Math.abs(shiftX) < 0.5 && Math.abs(shiftY) < 0.5) return;
+    setCoords((current) => current
+      ? { top: current.top + shiftY, left: current.left + shiftX }
+      : current);
+  }, [coords, content, isVisible]);
+
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -84,9 +107,9 @@ export function Tooltip({
   const getTransform = () => {
     switch (position) {
       case 'top':
-        return 'translate(-50%, -100%)';
+        return align === 'start' ? 'translate(0, -100%)' : align === 'end' ? 'translate(-100%, -100%)' : 'translate(-50%, -100%)';
       case 'bottom':
-        return 'translate(-50%, 0)';
+        return align === 'start' ? 'translate(0, 0)' : align === 'end' ? 'translate(-100%, 0)' : 'translate(-50%, 0)';
       case 'left':
         return 'translate(-100%, -50%)';
       case 'right':
@@ -109,14 +132,18 @@ export function Tooltip({
         createPortal(
           <div
             role="tooltip"
+            ref={tooltipRef}
             style={{
               position: 'fixed',
               top: `${coords.top}px`,
               left: `${coords.left}px`,
               transform: getTransform(),
               zIndex: 2147483647,
+              maxWidth: 'calc(100vw - 16px)',
+              maxHeight: 'calc(100vh - 16px)',
+              overflowY: 'auto',
             }}
-            className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1014]/98 border border-white/20 text-slate-100 text-[11px] font-medium shadow-[0_10px_25px_-5px_rgba(0,0,0,0.95)] backdrop-blur-md whitespace-nowrap animate-fade-in"
+            className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1014]/98 border border-white/20 text-slate-100 text-[11px] font-medium shadow-[0_10px_25px_-5px_rgba(0,0,0,0.95)] backdrop-blur-md animate-fade-in"
           >
             <span>{content}</span>
             {shortcut && (

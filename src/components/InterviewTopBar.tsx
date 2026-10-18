@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Move,
+  MousePointer,
   Maximize2,
   Minimize2,
   Camera,
@@ -13,6 +14,7 @@ import {
   LogOut,
   SlidersHorizontal,
   Volume2,
+  VolumeX,
   Mic,
   MicOff,
   User,
@@ -50,7 +52,7 @@ interface InterviewTopBarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenScreenPosition?: () => void;
-  onToggleClickThrough?: () => void;
+  onToggleClickThrough?: (control?: HTMLElement) => void;
   isClickThrough?: boolean;
   opacity: number;
   onOpacityChange: (val: number) => void;
@@ -86,8 +88,8 @@ const InterviewSessionTimer = React.memo(function InterviewSessionTimer({
 
   return (
     <Tooltip content="Elapsed Session Time" position="bottom">
-      <div className="font-mono text-xs font-semibold text-slate-200 tracking-wider bg-white/5 border border-white/10 px-2 py-0.5 rounded-md select-none">
-        {formatted}
+      <div className="w-[4rem] shrink-0 flex justify-center font-mono tabular-nums text-xs font-semibold text-slate-200 tracking-normal bg-white/5 border border-white/10 px-2 py-0.5 rounded-md select-none">
+        <span>{formatted}</span>
       </div>
     </Tooltip>
   );
@@ -112,7 +114,7 @@ function InterviewTopBarComponent({
   onScreenshot,
   onEndSession,
   isSpeaking = false,
-  isMicActive = true,
+  isMicActive = false,
   onToggleMic,
   isSharedAudioActive = false,
   sharedAudioError,
@@ -129,12 +131,12 @@ function InterviewTopBarComponent({
   opacity,
   onOpacityChange,
   onLogout,
-  userEmail = 'tee.jhay1@gmail.com',
+  userEmail = "tee.jhay1@gmail.com",
   zoomLevel = 100,
   onZoomChange,
   fontSizeLevel = 0,
   onFontSizeChange,
-  selectedLanguage = 'English',
+  selectedLanguage = "English",
   autoAnswer = true,
   onAutoAnswerChange,
   onEdit,
@@ -151,10 +153,10 @@ function InterviewTopBarComponent({
       }
     };
     if (showMoreMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showMoreMenu]);
 
@@ -162,12 +164,13 @@ function InterviewTopBarComponent({
   const formatTimer = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const rem = secs % 60;
-    return `${mins.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${rem.toString().padStart(2, "0")}`;
   };
 
   return (
     <div
       data-tauri-drag-region
+      data-hud-hit-region
       onMouseDown={(e) => {
         if (e.button === 0 && e.target === e.currentTarget) {
           startDragging();
@@ -179,28 +182,37 @@ function InterviewTopBarComponent({
       <div className="flex items-center gap-1.5">
         {/* 1. Shared Audio Button: Start/Stop listening to shared computer/meeting audio */}
         <Tooltip
+          align="start"
           content={
             sharedAudioError
               ? `Computer audio issue: ${sharedAudioError}`
               : isSharedAudioActive
-              ? 'Interviewer audio is active. Your microphone is controlled separately. Click to stop.'
-              : 'Start computer audio capture so interviewer speech is transcribed, even with your microphone muted.'
+                ? "Interviewer audio is active. Your microphone is controlled separately. Click to stop."
+                : "Start computer audio capture so interviewer speech is transcribed, even with your microphone muted."
           }
           position="bottom"
         >
           <button
             onClick={onToggleSharedAudio}
-            aria-label={isSharedAudioActive ? 'Stop computer audio capture' : 'Start computer audio capture'}
+            aria-label={
+              isSharedAudioActive
+                ? "Stop computer audio capture"
+                : "Start computer audio capture"
+            }
             className={`relative p-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center ${
               isSharedAudioActive
-                ? 'bg-rose-500/20 text-white border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.3)]'
-                : 'text-slate-400 hover:text-white hover:bg-white/10'
+                ? "bg-emerald-500/20 text-white border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                : "bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30"
             }`}
           >
             {isSharedAudioActive && (
-              <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)] animate-pulse" />
+              <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
             )}
-            <Volume2 className="w-4 h-4" />
+            {isSharedAudioActive ? (
+              <Volume2 className="w-4 h-4 text-emerald-300" />
+            ) : (
+              <VolumeX className="w-4 h-4" />
+            )}
           </button>
         </Tooltip>
 
@@ -210,8 +222,8 @@ function InterviewTopBarComponent({
             micError
               ? `Microphone error: ${micError}`
               : isMicActive
-              ? 'Microphone: Active (Click to mute)'
-              : 'Microphone: Muted (Click to unmute)'
+                ? "Microphone: Active (Click to mute)"
+                : "Microphone: Muted (Click to unmute)"
           }
           shortcut="⌘M"
           position="bottom"
@@ -220,17 +232,17 @@ function InterviewTopBarComponent({
             onClick={micError ? onEnableMic : onToggleMic}
             className={`relative p-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center ${
               micError
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                 : !isMicActive
-                ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                  ? "bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30"
+                  : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
             {isMicActive ? (
               <div className="relative flex items-center justify-center">
                 <Mic
                   className={`w-4 h-4 transition-transform ${
-                    isSpeaking ? 'text-emerald-400 scale-110' : 'text-slate-200'
+                    isSpeaking ? "text-emerald-400 scale-110" : "text-slate-200"
                   }`}
                 />
                 {isSpeaking && (
@@ -252,8 +264,8 @@ function InterviewTopBarComponent({
             onClick={onToggleAnswer}
             className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               showAnswer
-                ? 'bg-white/20 text-white border border-white/25 shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                ? "bg-white/20 text-white border border-white/25 shadow-sm"
+                : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -265,7 +277,11 @@ function InterviewTopBarComponent({
         </Tooltip>
 
         {/* Screenshot Button */}
-        <Tooltip content="Capture Screen / Snip" shortcut="⌘⇧S" position="bottom">
+        <Tooltip
+          content="Capture Screen / Snip"
+          shortcut="⌘⇧S"
+          position="bottom"
+        >
           <button
             onClick={onScreenshot}
             className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
@@ -279,13 +295,17 @@ function InterviewTopBarComponent({
         </Tooltip>
 
         {/* Chat Button */}
-        <Tooltip content="Manual Chat / Question Input" shortcut="⌘K" position="bottom">
+        <Tooltip
+          content="Manual Chat / Question Input"
+          shortcut="⌘K"
+          position="bottom"
+        >
           <button
             onClick={onToggleChat}
             className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               showChat
-                ? 'bg-white/20 text-white border border-white/25 shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                ? "bg-white/20 text-white border border-white/25 shadow-sm"
+                : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
@@ -316,30 +336,71 @@ function InterviewTopBarComponent({
           </div>
         </Tooltip>
 
+        {/* Keep this control interactive while the rest of the HUD clicks through. */}
+        <Tooltip
+          content={
+            isClickThrough
+              ? "Turn click-through off"
+              : "Let clicks pass through the HUD"
+          }
+          position="bottom"
+        >
+          <button
+            type="button"
+            data-click-through-toggle
+            aria-label={
+              isClickThrough
+                ? "Turn click-through off"
+                : "Turn click-through on"
+            }
+            aria-pressed={isClickThrough}
+            onClick={(event) => onToggleClickThrough?.(event.currentTarget)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-colors cursor-pointer text-[10px] font-semibold ${
+              isClickThrough
+                ? "text-amber-200 bg-amber-400/20 border-amber-300/40 hover:bg-amber-400/30"
+                : "text-slate-200 bg-white/5 border-white/15 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <MousePointer className="w-3.5 h-3.5" />
+            <span>{isClickThrough ? "Click-through on" : "Click-through"}</span>
+          </button>
+        </Tooltip>
+
         {/* Collapse / Expand Toggle */}
-        <Tooltip content={isCollapsed ? 'Expand panels' : 'Minimize panels'} position="bottom">
+        <Tooltip
+          content={isCollapsed ? "Expand panels" : "Minimize panels"}
+          position="bottom"
+        >
           <button
             onClick={onToggleCollapse}
             className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer"
           >
-            {isCollapsed ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+            {isCollapsed ? (
+              <Maximize2 className="w-3.5 h-3.5" />
+            ) : (
+              <Minimize2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </Tooltip>
 
         {/* Dynamic Interview Elapsed Timer */}
         <InterviewSessionTimer initialSeconds={timerSeconds ?? 0} />
 
-        {remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds <= 60 && (
-          <Tooltip content="Available interview time" position="bottom">
-            <div
-              aria-label={`${Math.floor(remainingSeconds / 60)} minutes and ${remainingSeconds % 60} seconds remaining`}
-              className="flex items-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-500/15 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-rose-200 select-none"
-            >
-              <span className="font-sans text-[10px] font-medium opacity-80">Left</span>
-              <span>{formatRemainingTime(remainingSeconds)}</span>
-            </div>
-          </Tooltip>
-        )}
+        {remainingSeconds !== null &&
+          remainingSeconds !== undefined &&
+          remainingSeconds <= 60 && (
+            <Tooltip content="Available interview time" position="bottom">
+              <div
+                aria-label={`${Math.floor(remainingSeconds / 60)} minutes and ${remainingSeconds % 60} seconds remaining`}
+                className="w-[5.5rem] shrink-0 flex items-center justify-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-500/15 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-rose-200 select-none"
+              >
+                <span className="font-sans text-[10px] font-medium opacity-80">
+                  Left
+                </span>
+                <span>{formatRemainingTime(remainingSeconds)}</span>
+              </div>
+            </Tooltip>
+          )}
 
         {/* Options / Settings Trigger Button & Popover (Matching Reference Image) */}
         <div className="relative z-50" ref={menuRef}>
@@ -348,8 +409,8 @@ function InterviewTopBarComponent({
               onClick={() => setShowMoreMenu(!showMoreMenu)}
               className={`p-1.5 rounded-lg border transition-all cursor-pointer select-none flex items-center justify-center ${
                 showMoreMenu
-                  ? 'bg-white/20 border-white/30 text-white shadow-sm'
-                  : 'bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/15'
+                  ? "bg-white/20 border-white/30 text-white shadow-sm"
+                  : "bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/15"
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -359,7 +420,8 @@ function InterviewTopBarComponent({
           {showMoreMenu && (
             <div
               data-tauri-drag-region="false"
-              style={{ WebkitAppRegion: 'no-drag' } as any}
+              data-hud-hit-region
+              style={{ WebkitAppRegion: "no-drag" } as any}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
               className="absolute right-0 top-full mt-2 w-64 bg-slate-950/95 border border-emerald-500/20 rounded-2xl p-2.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.98),0_0_25px_rgba(16,185,129,0.08)] backdrop-blur-2xl z-[9999] text-xs text-white max-h-[85vh] overflow-y-auto animate-fade-in space-y-1 select-none pointer-events-auto"
@@ -369,8 +431,11 @@ function InterviewTopBarComponent({
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
                   <User className="w-3 h-3 text-emerald-400" />
                 </div>
-                <span className="truncate font-mono text-[11px] text-slate-200 font-semibold" title={userEmail || 'tee.jhay1@gmail.com'}>
-                  {userEmail || 'tee.jhay1@gmail.com'}
+                <span
+                  className="truncate font-mono text-[11px] text-slate-200 font-semibold"
+                  title={userEmail || "tee.jhay1@gmail.com"}
+                >
+                  {userEmail || "tee.jhay1@gmail.com"}
                 </span>
               </div>
 
@@ -393,7 +458,10 @@ function InterviewTopBarComponent({
               <div className="flex items-center justify-between px-2.5 py-1.5 text-slate-200">
                 <div className="flex items-center gap-1.5">
                   <span>Private</span>
-                  <div className="relative group cursor-pointer" title="Stealth mode hides HUD from screen shares">
+                  <div
+                    className="relative group cursor-pointer"
+                    title="Stealth mode hides HUD from screen shares"
+                  >
                     <Info className="w-3 h-3 text-slate-400" />
                   </div>
                 </div>
@@ -404,12 +472,14 @@ function InterviewTopBarComponent({
                     if (onToggleClickThrough) onToggleClickThrough();
                   }}
                   className={`w-9 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-200 flex items-center ${
-                    isPrivate ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/15'
+                    isPrivate
+                      ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                      : "bg-white/15"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      isPrivate ? 'translate-x-4' : 'translate-x-0'
+                      isPrivate ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -421,7 +491,10 @@ function InterviewTopBarComponent({
                 <div className="flex items-center gap-1.5">
                   <Tooltip content="Zoom In (+5%)" position="top">
                     <button
-                      onClick={() => onZoomChange && onZoomChange(Math.min(130, (zoomLevel || 100) + 5))}
+                      onClick={() =>
+                        onZoomChange &&
+                        onZoomChange(Math.min(130, (zoomLevel || 100) + 5))
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
@@ -429,7 +502,10 @@ function InterviewTopBarComponent({
                   </Tooltip>
                   <Tooltip content="Zoom Out (-5%)" position="top">
                     <button
-                      onClick={() => onZoomChange && onZoomChange(Math.max(75, (zoomLevel || 100) - 5))}
+                      onClick={() =>
+                        onZoomChange &&
+                        onZoomChange(Math.max(75, (zoomLevel || 100) - 5))
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Minus className="w-3 h-3" />
@@ -452,7 +528,11 @@ function InterviewTopBarComponent({
                 <div className="flex items-center gap-1.5">
                   <Tooltip content="Increase Opacity (+5%)" position="top">
                     <button
-                      onClick={() => onOpacityChange(Math.min(1.0, Number((opacity + 0.05).toFixed(2))))}
+                      onClick={() =>
+                        onOpacityChange(
+                          Math.min(1.0, Number((opacity + 0.05).toFixed(2))),
+                        )
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
@@ -460,7 +540,11 @@ function InterviewTopBarComponent({
                   </Tooltip>
                   <Tooltip content="Decrease Opacity (-5%)" position="top">
                     <button
-                      onClick={() => onOpacityChange(Math.max(0.3, Number((opacity - 0.05).toFixed(2))))}
+                      onClick={() =>
+                        onOpacityChange(
+                          Math.max(0.3, Number((opacity - 0.05).toFixed(2))),
+                        )
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Minus className="w-3 h-3" />
@@ -482,13 +566,20 @@ function InterviewTopBarComponent({
                 <div className="flex items-center gap-1.5">
                   <span>Font size</span>
                   <span className="text-[10px] font-mono text-slate-300 bg-white/10 border border-white/10 px-1.5 py-0.2 rounded select-none">
-                    {fontSizeLevel === 0 ? 'Normal' : fontSizeLevel > 0 ? `+${fontSizeLevel}` : `${fontSizeLevel}`}
+                    {fontSizeLevel === 0
+                      ? "Normal"
+                      : fontSizeLevel > 0
+                        ? `+${fontSizeLevel}`
+                        : `${fontSizeLevel}`}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Tooltip content="Increase Font Size" position="top">
                     <button
-                      onClick={() => onFontSizeChange && onFontSizeChange(Math.min(4, (fontSizeLevel || 0) + 1))}
+                      onClick={() =>
+                        onFontSizeChange &&
+                        onFontSizeChange(Math.min(4, (fontSizeLevel || 0) + 1))
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
@@ -496,7 +587,10 @@ function InterviewTopBarComponent({
                   </Tooltip>
                   <Tooltip content="Decrease Font Size" position="top">
                     <button
-                      onClick={() => onFontSizeChange && onFontSizeChange(Math.max(-2, (fontSizeLevel || 0) - 1))}
+                      onClick={() =>
+                        onFontSizeChange &&
+                        onFontSizeChange(Math.max(-2, (fontSizeLevel || 0) - 1))
+                      }
                       className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
                     >
                       <Minus className="w-3 h-3" />
@@ -516,7 +610,7 @@ function InterviewTopBarComponent({
               {/* Session language is fixed by the choice made during setup. */}
               <div className="w-full px-2.5 py-2 rounded-xl flex items-center gap-2 text-slate-200 select-none">
                 <Globe className="w-3.5 h-3.5 text-slate-300" />
-                <span>{selectedLanguage || 'English'}</span>
+                <span>{selectedLanguage || "English"}</span>
               </div>
 
               {/* 8. Auto Answer Toggle */}
@@ -524,14 +618,18 @@ function InterviewTopBarComponent({
                 <span>Auto Answer</span>
                 <button
                   type="button"
-                  onClick={() => onAutoAnswerChange && onAutoAnswerChange(!autoAnswer)}
+                  onClick={() =>
+                    onAutoAnswerChange && onAutoAnswerChange(!autoAnswer)
+                  }
                   className={`w-9 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-200 flex items-center ${
-                    autoAnswer ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/15'
+                    autoAnswer
+                      ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                      : "bg-white/15"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      autoAnswer ? 'translate-x-4' : 'translate-x-0'
+                      autoAnswer ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>

@@ -82,7 +82,7 @@ export function ScreenPositionPopover({ isOpen, onClose }: ScreenPositionPopover
   };
 
   return (
-    <div className="absolute inset-0 bg-[#f8f9fa] dark:bg-slate-900 z-50 flex flex-col p-5 select-none animate-fade-in overflow-y-auto rounded-none text-slate-800 dark:text-slate-100 space-y-3.5">
+    <div data-hud-hit-region className="absolute inset-0 bg-[#f8f9fa] dark:bg-slate-900 z-50 flex flex-col p-5 select-none animate-fade-in overflow-y-auto rounded-none text-slate-800 dark:text-slate-100 space-y-3.5">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2">
