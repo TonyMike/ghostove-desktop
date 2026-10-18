@@ -116,7 +116,7 @@ export function CreateSessionModal({
         : [];
 
       setAvailableModels(models);
-      const defaultModel = typeof data?.defaultModel === 'string' && models.some((item) => item.id === data.defaultModel)
+      const defaultModel = typeof data?.defaultModel === 'string' && models.some((item: InterviewModelOption) => item.id === data.defaultModel)
         ? data.defaultModel
         : models[0]?.id || '';
       setModel(defaultModel);
