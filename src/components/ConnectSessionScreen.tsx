@@ -17,7 +17,6 @@ import { AudioPermissionModal } from './AudioPermissionModal';
 import {
   checkSystemPermissions,
   openPrivacySettings,
-  requestScreenCaptureAccess,
   startNativeSystemAudioCapture,
   stopNativeSystemAudioCapture,
   usesNativeMacSystemAudio,
@@ -179,21 +178,11 @@ export function ConnectSessionScreen({
     const nativeMacAudio = requiresMeetingAudio && nativeMacPlatform;
     let sharedAudioStream: MediaStream | null = null;
     if (nativeMacAudio) {
-      // Request screen recording explicitly before the HUD opens. This access
-      // is also required by on-demand screenshot analysis.
-      const screenAccessGranted = await requestScreenCaptureAccess();
-      const refreshedPermissions = await checkSystemPermissions();
-      if (!screenAccessGranted || !refreshedPermissions.screen_capture) {
-        setSharedAudioSelectionError(
-          'Screen & System Audio Recording access is required. Enable Ghostove Desktop in System Settings, then retry. macOS may require you to quit and reopen Ghostove after granting access.'
-        );
-        setCheckingAudio(false);
-        return;
-      }
-
-      // Start and stop once as a preflight so macOS asks for system-audio
-      // authorization before the session begins. The HUD starts capture again
-      // after its audio listener is mounted.
+      // ScreenCaptureKit is the source of truth for this permission. The
+      // legacy CoreGraphics preflight can disagree with TCC for a packaged
+      // app, so don't block capture based on that separate status check.
+      // Starting a short capture here also lets macOS request access before
+      // the session begins; the HUD starts capture again after mounting.
       let captureStarted = false;
       try {
         await startNativeSystemAudioCapture();
@@ -208,7 +197,7 @@ export function ConnectSessionScreen({
         }
         console.warn('[Ghostove] System-audio permission preflight failed:', error);
         setSharedAudioSelectionError(
-          'System-audio access is required. Enable Ghostove Desktop in System Settings → Privacy & Security → Screen & System Audio Recording, then retry.'
+          `Ghostove could not start macOS system-audio capture: ${error?.message || String(error)}. Check Screen & System Audio Recording access in System Settings, then retry.`
         );
         setCheckingAudio(false);
         return;

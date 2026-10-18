@@ -42,7 +42,7 @@
     ],
     "macOS": {
       "frameworks": [],
-      "minimumSystemVersion": "10.15",
+      "minimumSystemVersion": "13.0",
       "signingIdentity": null,
       "providerShortName": null,
       "infoPlist": "Info.plist"
