@@ -301,6 +301,7 @@ export function CreateSessionModal({
           resume_id: selectedResumeId || null,
           document_id: selectedDocumentId || null,
           mode: sessionType,
+          language,
           model: model,
           duration_seconds: 0,
           save_transcript: saveTranscript,

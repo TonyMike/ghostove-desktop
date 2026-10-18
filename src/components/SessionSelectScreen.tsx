@@ -25,6 +25,7 @@ export interface SessionItem {
   company_name?: string;
   job_description?: string;
   role?: string;
+  language?: string;
   resume_id?: string | null;
   document_id?: string | null;
   status?: string;
@@ -117,6 +118,7 @@ export function SessionSelectScreen({
           company_name: s.company_name || s.title || 'Company',
           job_description: s.job_description || s.transcript_snippet || '',
           role: s.role || '',
+          language: s.language || 'English',
           resume_id: s.resume_id || null,
           document_id: s.document_id || null,
           status: s.status || 'not_started',

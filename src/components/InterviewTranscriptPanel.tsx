@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Globe, ChevronDown, Check, Trash2, Volume2 } from 'lucide-react';
+import React, { useRef, useEffect } from 'react';
+import { Globe, Trash2, Volume2 } from 'lucide-react';
 import { TranscriptItem } from '../hooks/useWebSocketStream';
 import { Tooltip } from './common/Tooltip';
 
@@ -10,20 +10,8 @@ interface InterviewTranscriptPanelProps {
   volumeLevel: number;
   onClear: () => void;
   selectedLanguage: string;
-  onSelectLanguage: (lang: string) => void;
   fontSizeLevel?: number;
 }
-
-const LANGUAGES = [
-  'English',
-  'Spanish (Español)',
-  'French (Français)',
-  'German (Deutsch)',
-  'Mandarin (中文)',
-  'Portuguese (Português)',
-  'Japanese (日本語)',
-  'Hindi (हिन्दी)',
-];
 
 function InterviewTranscriptPanelComponent({
   transcriptList,
@@ -32,10 +20,8 @@ function InterviewTranscriptPanelComponent({
   volumeLevel,
   onClear,
   selectedLanguage,
-  onSelectLanguage,
   fontSizeLevel = 0,
 }: InterviewTranscriptPanelProps) {
-  const [showLangMenu, setShowLangMenu] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Dynamic font size scaling based on fontSizeLevel (-2 to +4)
@@ -81,44 +67,12 @@ function InterviewTranscriptPanelComponent({
             </div>
           </Tooltip>
 
-          {/* Language Selector Dropdown */}
-          <div className="relative">
-            <Tooltip content="Select Speech Language" position="bottom">
-              <button
-                onClick={() => setShowLangMenu(!showLangMenu)}
-                className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-medium text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <Globe className="w-3 h-3 text-slate-400" />
-                <span>{selectedLanguage.split(' ')[0]}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
-              </button>
-            </Tooltip>
-
-            {showLangMenu && (
-              <div
-                className="absolute left-0 top-full mt-1.5 w-44 bg-slate-950/95 border border-emerald-500/20 rounded-xl p-1 shadow-2xl backdrop-blur-2xl z-50 text-xs text-slate-200 space-y-0.5 animate-fade-in"
-                onClick={() => setShowLangMenu(false)}
-              >
-                {LANGUAGES.map((lang) => {
-                  const isSelected = selectedLanguage.startsWith(lang.split(' ')[0]);
-                  return (
-                    <button
-                      key={lang}
-                      onClick={() => onSelectLanguage(lang)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-[11px] transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-white/15 text-white font-semibold'
-                          : 'hover:bg-white/10 text-slate-300'
-                      }`}
-                    >
-                      <span>{lang}</span>
-                      {isSelected && <Check className="w-3 h-3 text-emerald-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <Tooltip content="Language selected when this session was created" position="bottom">
+            <div className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-medium text-slate-200 flex items-center gap-1">
+              <Globe className="w-3 h-3 text-slate-400" />
+              <span>{selectedLanguage.split(' ')[0]}</span>
+            </div>
+          </Tooltip>
         </div>
 
         {/* Right: Clear ⌘⇧⌫ */}

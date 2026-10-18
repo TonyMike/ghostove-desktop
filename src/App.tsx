@@ -356,6 +356,7 @@ function AppContent() {
             <MockInterviewHUD
               token={token}
               sessionId={selectedSession?.id}
+              language={selectedSession?.language || 'English'}
               jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
               onBackToMenu={() => {
                 setSharedAudioStream(null);
@@ -369,6 +370,7 @@ function AppContent() {
             <InterviewHUD
               token={token}
               sessionId={selectedSession?.id}
+              language={selectedSession?.language || 'English'}
               initialSharedStream={sharedAudioStream}
               onLogout={handleLogout}
               onBackToMenu={() => {

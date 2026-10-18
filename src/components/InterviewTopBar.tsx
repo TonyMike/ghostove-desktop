@@ -23,9 +23,7 @@ import {
   Minus,
   RotateCcw,
   Globe,
-  ChevronDown,
   Pencil,
-  Check,
 } from 'lucide-react';
 import { startDragging } from '../utils/windowManager';
 import { openBrowserUrl } from '../utils/browser';
@@ -62,7 +60,6 @@ interface InterviewTopBarProps {
   fontSizeLevel?: number;
   onFontSizeChange?: (f: number) => void;
   selectedLanguage?: string;
-  onSelectLanguage?: (lang: string) => void;
   autoAnswer?: boolean;
   onAutoAnswerChange?: (val: boolean) => void;
   onEdit?: () => void;
@@ -136,13 +133,11 @@ function InterviewTopBarComponent({
   fontSizeLevel = 0,
   onFontSizeChange,
   selectedLanguage = 'English',
-  onSelectLanguage,
   autoAnswer = true,
   onAutoAnswerChange,
   onEdit,
 }: InterviewTopBarProps) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showLangSubmenu, setShowLangSubmenu] = useState(false);
   const [isPrivate, setIsPrivate] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -513,56 +508,10 @@ function InterviewTopBarComponent({
                 </div>
               </div>
 
-              {/* 7. Language Selector */}
-              <div className="relative" data-tauri-drag-region="false">
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowLangSubmenu(!showLangSubmenu);
-                  }}
-                  className="w-full text-left px-2.5 py-2 rounded-xl flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer text-slate-200"
-                >
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-3.5 h-3.5 text-slate-300" />
-                    <span>{selectedLanguage || 'English'}</span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showLangSubmenu ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showLangSubmenu && (
-                  <div
-                    data-tauri-drag-region="false"
-                    style={{ WebkitAppRegion: 'no-drag' } as any}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="mt-1 p-1 bg-slate-950/95 rounded-xl space-y-0.5 border border-emerald-500/20 max-h-48 overflow-y-auto shadow-inner"
-                  >
-                    {['English', 'Spanish', 'French', 'German', 'Mandarin', 'Japanese', 'Hindi', 'Portuguese'].map((lang) => {
-                      const isSelected = (selectedLanguage || 'English').toLowerCase().includes(lang.toLowerCase());
-                      return (
-                        <button
-                          type="button"
-                          key={lang}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (onSelectLanguage) onSelectLanguage(lang);
-                            setShowLangSubmenu(false);
-                          }}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer select-none ${
-                            isSelected ? 'bg-white/20 text-white font-medium' : 'text-slate-300 hover:bg-white/10'
-                          }`}
-                        >
-                          <span>{lang}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              {/* Session language is fixed by the choice made during setup. */}
+              <div className="w-full px-2.5 py-2 rounded-xl flex items-center gap-2 text-slate-200 select-none">
+                <Globe className="w-3.5 h-3.5 text-slate-300" />
+                <span>{selectedLanguage || 'English'}</span>
               </div>
 
               {/* 8. Auto Answer Toggle */}

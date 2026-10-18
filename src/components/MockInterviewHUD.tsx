@@ -28,6 +28,7 @@ import { EndSessionDialog } from './common/EndSessionDialog';
 interface MockInterviewHUDProps {
   token: string;
   sessionId?: string | null;
+  language?: string;
   jobTitle?: string;
   onBackToMenu?: () => void;
   onSwitchToLive?: () => void;
@@ -50,6 +51,7 @@ interface EvaluationResult {
 export function MockInterviewHUD({
   token,
   sessionId,
+  language = 'English',
   jobTitle = 'Senior Software Engineer',
   onBackToMenu,
   onSwitchToLive,
@@ -109,7 +111,7 @@ export function MockInterviewHUD({
         const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ job_title: jobTitle }),
+          body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),
         });
 
         if (res.ok) {
@@ -125,7 +127,7 @@ export function MockInterviewHUD({
       }
     }
     loadQuestions();
-  }, [jobTitle, token]);
+  }, [jobTitle, sessionId, token]);
 
   // Text-To-Speech (TTS): AI interviewer speaking the questions aloud
   const stopSpeaking = () => {
@@ -135,19 +137,27 @@ export function MockInterviewHUD({
     }
   };
 
+  const languageCode = language.startsWith('Spanish') ? 'es-ES'
+    : language.startsWith('French') ? 'fr-FR'
+    : language.startsWith('German') ? 'de-DE'
+    : language.startsWith('Mandarin') ? 'zh-CN'
+    : language.startsWith('Portuguese') ? 'pt-BR'
+    : language.startsWith('Japanese') ? 'ja-JP'
+    : language.startsWith('Hindi') ? 'hi-IN' : 'en-US';
+
   const speakQuestion = (text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
+    utterance.lang = languageCode;
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
     const voices = window.speechSynthesis.getVoices();
     const preferredVoice = voices.find(
       (v) =>
-        v.lang.startsWith('en') &&
+        v.lang.toLowerCase().startsWith(languageCode.slice(0, 2)) &&
         (v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Alex') || v.name.includes('Google') || v.name.includes('US'))
     );
     if (preferredVoice) {
@@ -176,7 +186,7 @@ export function MockInterviewHUD({
       };
     }
     return () => stopSpeaking();
-  }, [currentIndex, questions, loadingQuestions, ttsEnabled]);
+  }, [currentIndex, questions, loadingQuestions, ttsEnabled, language]);
 
   // Voice recording via browser Web Speech API with 2000ms pause debounce
   const toggleRecording = () => {
@@ -208,7 +218,7 @@ export function MockInterviewHUD({
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.lang = languageCode;
 
       recognition.onresult = (event: any) => {
         let currentTranscript = '';
@@ -280,6 +290,7 @@ export function MockInterviewHUD({
           question_text: questions[currentIndex],
           candidate_response: textToEvaluate,
           model: 'gemini-3.5-flash',
+          session_id: sessionId,
         }),
       });
 
@@ -399,6 +410,7 @@ export function MockInterviewHUD({
           job_title: jobTitle,
           question_text: questions[currentIndex],
           model: 'gemini-3.5-flash',
+          session_id: sessionId,
         }),
       });
 
@@ -455,7 +467,7 @@ export function MockInterviewHUD({
       const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ job_title: jobTitle }),
+        body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),
       });
       if (res.ok) {
         const data = await res.json();

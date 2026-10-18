@@ -31,6 +31,7 @@ import {
 interface InterviewHUDProps {
   token: string;
   sessionId?: string | null;
+  language?: string;
   initialSharedStream?: MediaStream | null;
   onLogout?: () => void;
   onBackToMenu?: () => void;
@@ -43,6 +44,7 @@ interface InterviewHUDProps {
 export function InterviewHUD({
   token,
   sessionId,
+  language = "English",
   initialSharedStream,
   onLogout,
   onBackToMenu,
@@ -53,7 +55,7 @@ export function InterviewHUD({
 }: InterviewHUDProps) {
   const [showAnswer, setShowAnswer] = useState(true);
   const [showChat, setShowChat] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("English");
+  const selectedLanguage = language;
   const [opacity, setOpacity] = useState(0.95);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [fontSizeLevel, setFontSizeLevel] = useState(0);
@@ -196,11 +198,11 @@ export function InterviewHUD({
   const handleScreenshot = useCallback(async () => {
     setShowAnswer(true);
     showToast("📸 Capturing screen and checking for a question or issue...");
-    const ok = await analyzeScreenshot(selectedLanguage || "Python");
+    const ok = await analyzeScreenshot("Python");
     if (!ok) {
       showToast("⚠️ Screenshot could not be analyzed. See the answer panel for details.");
     }
-  }, [analyzeScreenshot, selectedLanguage, showToast]);
+  }, [analyzeScreenshot, showToast]);
 
   const sessionStartTimeRef = useRef<number>(Date.now());
 
@@ -545,7 +547,6 @@ export function InterviewHUD({
           onFontSizeChange={setFontSizeLevel}
           userEmail={userEmail}
           selectedLanguage={selectedLanguage}
-          onSelectLanguage={setSelectedLanguage}
           autoAnswer={autoAnswer}
           onAutoAnswerChange={setAutoAnswer}
           onEdit={() => showToast("Session context & prompt settings")}
@@ -616,7 +617,6 @@ export function InterviewHUD({
               volumeLevel={volumeLevel}
               onClear={clearTranscripts}
               selectedLanguage={selectedLanguage}
-              onSelectLanguage={setSelectedLanguage}
               fontSizeLevel={fontSizeLevel}
             />
           </div>
