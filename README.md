@@ -52,9 +52,19 @@ When Ghostove Web is running at `http://localhost:3000`, the desktop pairing pag
 
 ### Desktop releases and in-app updates
 
-The source repository stays private. GitHub Actions publishes only signed installers and Tauri's `latest.json` manifest to the public `TonyMike/ghostove-desktop-releases` repository. The release repository contains only a README on its `master` branch; do not copy the desktop source into it.
+The source repository stays private. GitHub Actions publishes installers and Tauri's `latest.json` manifest to the public `TonyMike/ghostove-desktop-releases` repository. macOS builds must be signed with the same Developer ID Application certificate and notarized for each release so macOS can retain the app's privacy grants across updates. The release repository contains only a README on its `master` branch; do not copy the desktop source into it.
 
-In the private `ghostove-desktop` repository, add the Actions environment secret `GHOSTOVE_RELEASES_TOKEN` to the `ghostove desktop` environment. Use a fine-grained token with access to only `ghostove-desktop-releases` and the repository `Contents: Read and write` permission. Keep `TAURI_SIGNING_PRIVATE_KEY` in the private repository's Actions environment as it is now. The workflow needs both secrets to publish updater-enabled builds.
+In the private `ghostove-desktop` repository, add these Actions environment secrets to the `ghostove desktop` environment:
+
+- `GHOSTOVE_RELEASES_TOKEN`: fine-grained token with access to only `ghostove-desktop-releases` and repository `Contents: Read and write` permission.
+- `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: Tauri updater signing key and password.
+- `APPLE_CERTIFICATE`: base64-encoded `.p12` Developer ID Application certificate.
+- `APPLE_CERTIFICATE_PASSWORD`: password used when exporting the `.p12` certificate.
+- `APPLE_SIGNING_IDENTITY`: exact Developer ID Application identity name shown by `security find-identity -v -p codesigning`.
+- `APPLE_KEYCHAIN_PASSWORD`: password used by the macOS CI runner to import the certificate.
+- `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`: Apple account email, app-specific password, and team ID used for notarization.
+
+The workflow validates these credentials and imports the certificate before publishing macOS releases. Keep using the same Developer ID certificate for updates so macOS recognizes Ghostove as the same app for Screen & System Audio Recording access.
 
 Users running a build that points at the old private update feed need to install one release manually after this feed migration. Subsequent builds can update through the app.
 
