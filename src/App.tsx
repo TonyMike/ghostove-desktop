@@ -19,6 +19,8 @@ import { openBrowserUrl } from './utils/browser';
 import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
 import { deviceBoundFetch } from './utils/deviceBoundFetch';
 import { MandatoryUpdater } from './components/MandatoryUpdater';
+import { AudioOnboardingScreen } from './components/AudioOnboardingScreen';
+import { isAudioOnboardingComplete } from './utils/onboarding';
 
 type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
 type InterviewTimeStatus = InterviewTimeCheck | 'checking';
@@ -26,7 +28,7 @@ type InterviewTimeStatus = InterviewTimeCheck | 'checking';
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
+  const [view, setView] = useState<'audio-onboarding' | 'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
   const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
   const [startSharedAudioOnConnect, setStartSharedAudioOnConnect] = useState(false);
@@ -126,6 +128,7 @@ function AppContent() {
         if (!pairingTokenReceived.current) {
           if (isValid) {
             setToken(stored);
+            if (!isAudioOnboardingComplete()) setView('audio-onboarding');
             checkUserAccess(stored);
           } else {
             await clearStoredToken();
@@ -144,7 +147,7 @@ function AppContent() {
     setToken(newToken);
     setInterviewTimeStatus('checking');
     void checkUserAccess(newToken);
-    setView('session-select');
+    setView(isAudioOnboardingComplete() ? 'session-select' : 'audio-onboarding');
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const win = getCurrentWindow();
@@ -167,6 +170,11 @@ function AppContent() {
       await setStoredToken(payload.token);
       setToken(payload.token);
       setInterviewTimeStatus('checking');
+    }
+
+    if (!isAudioOnboardingComplete()) {
+      setView('audio-onboarding');
+      return;
     }
 
     // Bring desktop app window to foreground, unminimize, and focus
@@ -310,10 +318,12 @@ function AppContent() {
     setView('connect-session');
   };
 
-  // Keep native Tauri window appropriately sized (440x600 outside active session, or 440x48 when collapsed)
+  // Give the first-run guide enough room for its setup steps and OS screenshot.
   useEffect(() => {
     if (view !== 'active-session') {
-      if (isCollapsed) {
+      if (view === 'audio-onboarding') {
+        resizeWindow(1080, 740);
+      } else if (isCollapsed) {
         resizeWindow(440, 48);
       } else {
         resizeWindow(440, 600);
@@ -401,6 +411,15 @@ function AppContent() {
           )}
         </div>
         <MandatoryUpdater deferWhileSessionActive />
+      </>
+    );
+  }
+
+  if (view === 'audio-onboarding') {
+    return (
+      <>
+        <AudioOnboardingScreen onComplete={() => setView('session-select')} />
+        <MandatoryUpdater deferWhileSessionActive={false} />
       </>
     );
   }

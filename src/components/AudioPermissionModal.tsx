@@ -11,7 +11,7 @@ import {
   Monitor
 } from 'lucide-react';
 import macGuideImg from '../assets/mac-permission-guide.png';
-import { checkSystemPermissions } from '../utils/windowManager';
+import { checkSystemPermissions, usesNativeMacSystemAudio } from '../utils/windowManager';
 
 interface AudioPermissionModalProps {
   isOpen: boolean;
@@ -110,11 +110,26 @@ export function AudioPermissionModal({
     } catch (err: any) {
       console.warn('[Ghostove] Re-testing mic access failed:', err);
       setTesting(false);
-      setErrorMsg(
-        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-          ? 'Microphone permission is still disabled in your system settings. Please toggle it on and try again.'
-          : err.message || 'Microphone access could not be acquired.'
-      );
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        const permissions = await checkSystemPermissions().catch(() => null);
+        const nativeMacPlatform = usesNativeMacSystemAudio();
+        const systemMicGranted = nativeMacPlatform && permissions?.microphone === true;
+        console.warn('[Ghostove] Microphone permission diagnostic:', {
+          nativeMacPlatform,
+          systemMicGranted: permissions?.microphone ?? 'unavailable',
+          errorName: err.name,
+          errorMessage: err.message,
+        });
+        setErrorMsg(
+          systemMicGranted
+            ? 'macOS already allows Ghostove Desktop to use the microphone, but Ghostove’s embedded webview denied this request. Quit Ghostove completely and reopen it. If it still fails, contact support and include this message.'
+            : nativeMacPlatform
+              ? 'macOS reports that Ghostove Desktop does not have microphone access. Enable it in System Settings, quit Ghostove completely, then reopen it and try again.'
+              : 'Ghostove could not access the microphone. Check your operating system’s microphone privacy settings and allow microphone access for Ghostove, then try again.'
+        );
+      } else {
+        setErrorMsg(err.message || 'Microphone access could not be acquired.');
+      }
     }
   };
 
