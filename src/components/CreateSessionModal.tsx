@@ -15,6 +15,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
+import { deviceBoundFetch } from '../utils/deviceBoundFetch';
 import { openBrowserUrl } from '../utils/browser';
 import { getStoredToken } from '../utils/store';
 
@@ -97,7 +98,7 @@ export function CreateSessionModal({
       const headers: Record<string, string> = {};
       if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
-      const response = await fetch(`${BACKEND_API_URL}/api/interview-models`, {
+      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/interview-models`, {
         headers,
         cache: 'no-store',
         signal,
@@ -164,7 +165,7 @@ export function CreateSessionModal({
       }
 
       const fetchJson = async (path: string) => {
-        const response = await fetch(`${BACKEND_API_URL}${path}`, { headers, cache: 'no-store' });
+        const response = await deviceBoundFetch(`${BACKEND_API_URL}${path}`, { headers, cache: 'no-store' });
         const body = await response.json().catch(() => null);
         if (!response.ok) {
           throw new Error(body?.detail || `Backend returned ${response.status} for ${path}`);
@@ -283,7 +284,7 @@ export function CreateSessionModal({
 
     try {
       // Create the session through the backend API; Web remains the pairing and dashboard surface.
-      const res = await fetch(`${BACKEND_API_URL}/api/sessions`, {
+      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),

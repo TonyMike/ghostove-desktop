@@ -17,6 +17,7 @@ import {
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
 import { WEB_API_URL, BACKEND_API_URL } from './utils/config';
+import { deviceBoundFetch } from './utils/deviceBoundFetch';
 import { MandatoryUpdater } from './components/MandatoryUpdater';
 
 type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
@@ -73,7 +74,7 @@ function AppContent() {
       return 'unavailable';
     }
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/credits`, {
+      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/credits`, {
         headers: { Authorization: `Bearer ${userToken}` },
         cache: 'no-store',
       });
@@ -105,7 +106,7 @@ function AppContent() {
 
   const verifyToken = useCallback(async (tokenToVerify: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/session/verify-token?token=${tokenToVerify}`);
+      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/session/verify-token?token=${encodeURIComponent(tokenToVerify)}`);
       if (res.ok) {
         const data = await res.json();
         return data.valid === true;
@@ -201,7 +202,7 @@ function AppContent() {
         // Fetch session details from cloud web API
         try {
           const authHeaders = (payload.token || token) ? { Authorization: `Bearer ${payload.token || token}` } : undefined;
-          const res = await fetch(`${BACKEND_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
+          const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
           if (res.ok) {
             const data = await res.json();
             sessionData = data.session || data;

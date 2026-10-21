@@ -1,48 +1,40 @@
-// Local storage & persistent token manager
+import { invoke, isTauri } from '@tauri-apps/api/core';
+
 const TOKEN_KEY = 'ghostove_auth_token';
 
 export async function getStoredToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+  if (!isTauri()) return localStorage.getItem(TOKEN_KEY);
 
   try {
-    // Try Tauri store if available
-    const { LazyStore } = await import('@tauri-apps/plugin-store');
-    const store = new LazyStore('.ghostove-settings.dat');
-    const token = await store.get<string>(TOKEN_KEY);
+    const token = await invoke<string | null>('get_stored_auth_token');
     if (token) return token;
-  } catch (e) {
-    // Fallback to localStorage
-  }
 
-  return localStorage.getItem(TOKEN_KEY);
+    // Move sessions from the former webview store into the OS keychain once.
+    const legacyToken = localStorage.getItem(TOKEN_KEY);
+    if (legacyToken) {
+      await invoke('set_stored_auth_token', { token: legacyToken });
+      localStorage.removeItem(TOKEN_KEY);
+      return legacyToken;
+    }
+  } catch (error) {
+    console.error('[Auth] Could not access the operating-system keychain.');
+  }
+  return null;
 }
 
 export async function setStoredToken(token: string): Promise<void> {
   if (typeof window === 'undefined') return;
-
-  localStorage.setItem(TOKEN_KEY, token);
-
-  try {
-    const { LazyStore } = await import('@tauri-apps/plugin-store');
-    const store = new LazyStore('.ghostove-settings.dat');
-    await store.set(TOKEN_KEY, token);
-    await store.save();
-  } catch (e) {
-    // Ignore tauri store fallback
+  if (isTauri()) {
+    await invoke('set_stored_auth_token', { token });
+    localStorage.removeItem(TOKEN_KEY);
+    return;
   }
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 export async function clearStoredToken(): Promise<void> {
   if (typeof window === 'undefined') return;
-
   localStorage.removeItem(TOKEN_KEY);
-
-  try {
-    const { LazyStore } = await import('@tauri-apps/plugin-store');
-    const store = new LazyStore('.ghostove-settings.dat');
-    await store.delete(TOKEN_KEY);
-    await store.save();
-  } catch (e) {
-    // Ignore
-  }
+  if (isTauri()) await invoke('clear_stored_auth_token');
 }

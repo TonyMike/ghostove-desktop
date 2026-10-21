@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { resizeWindow, startDragging } from '../utils/windowManager';
 import { WEB_API_URL, BACKEND_API_URL } from '../utils/config';
+import { deviceBoundFetch } from '../utils/deviceBoundFetch';
 import { EndSessionDialog } from './common/EndSessionDialog';
 
 interface MockInterviewHUDProps {
@@ -108,7 +109,7 @@ export function MockInterviewHUD({
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
+        const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),
@@ -282,7 +283,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/evaluate-response`, {
+      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/evaluate-response`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -358,7 +359,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      fetch(`${BACKEND_API_URL}/api/sessions/save`, {
+      deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/save`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -371,7 +372,7 @@ export function MockInterviewHUD({
       }).catch(() => {});
 
       if (items.length > 0) {
-        fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
+        deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ action: 'generate_notes' }),
@@ -403,7 +404,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/ideal-answer`, {
+      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/ideal-answer`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -464,7 +465,7 @@ export function MockInterviewHUD({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
+      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),

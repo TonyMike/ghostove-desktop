@@ -8,7 +8,8 @@ import {
   usesNativeMacSystemAudio,
 } from '../utils/windowManager';
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
-import { getOrCreateDeviceId } from '../utils/device';
+import { getDeviceIdentity, signDeviceChallenge } from '../utils/device';
+import { deviceBoundFetch } from '../utils/deviceBoundFetch';
 
 export interface TranscriptItem {
   id: string;
@@ -184,7 +185,7 @@ export function useRealAudioListener({
   const refreshQuota = useCallback(async (): Promise<number | null> => {
     if (!token) return null;
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/credits`, {
+      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) return null;
@@ -879,7 +880,7 @@ export function useRealAudioListener({
     let reconnectTimeout: any = null;
     const effectiveToken = token || 'desktop-dev-token';
 
-    const connectWs = () => {
+    const connectWs = async () => {
       if (isUnmounted) return;
 
       // Close any existing active connection first to prevent dual sockets during hot reloads
@@ -891,7 +892,22 @@ export function useRealAudioListener({
       }
 
       try {
-        const deviceId = typeof window !== 'undefined' ? getOrCreateDeviceId() : '';
+        const identity = await getDeviceIdentity();
+        let deviceProofId = '';
+        let deviceProof = '';
+        if (token) {
+          const challengeResponse = await fetch(`${BACKEND_API_URL}/api/auth/device-challenge`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const challengeData = await challengeResponse.json().catch(() => ({}));
+          if (!challengeResponse.ok || !challengeData.challengeId || !challengeData.challenge) {
+            throw new Error(challengeData.detail || 'Could not verify this desktop device. Pair it again from Ghostove Web.');
+          }
+          deviceProofId = challengeData.challengeId;
+          deviceProof = await signDeviceChallenge(challengeData.challenge);
+        }
+        if (isUnmounted) return;
         const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('mac');
         const deviceOs = isMac ? 'macos' : 'windows';
         const deviceName = `${isMac ? 'Apple Mac' : 'Windows PC'} Stealth HUD`;
@@ -903,8 +919,9 @@ export function useRealAudioListener({
         if (selectedLanguage) {
           fullUrl += `&language=${encodeURIComponent(selectedLanguage)}`;
         }
-        if (deviceId) {
-          fullUrl += `&device_id=${encodeURIComponent(deviceId)}&device_name=${encodeURIComponent(deviceName)}&device_os=${encodeURIComponent(deviceOs)}`;
+        fullUrl += `&device_id=${encodeURIComponent(identity.deviceId)}&device_name=${encodeURIComponent(deviceName)}&device_os=${encodeURIComponent(deviceOs)}`;
+        if (deviceProofId && deviceProof) {
+          fullUrl += `&device_proof_id=${encodeURIComponent(deviceProofId)}&device_proof=${encodeURIComponent(deviceProof)}`;
         }
         const ws = new WebSocket(fullUrl);
         wsRef.current = ws;

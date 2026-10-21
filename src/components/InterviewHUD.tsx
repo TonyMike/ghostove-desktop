@@ -20,6 +20,7 @@ import {
 } from "../utils/windowManager";
 import { openBrowserUrl } from "../utils/browser";
 import { WEB_API_URL, BACKEND_API_URL, WS_URL } from "../utils/config";
+import { deviceBoundFetch } from "../utils/deviceBoundFetch";
 import {
   MousePointer,
   CheckCircle2,
@@ -260,7 +261,7 @@ export function InterviewHUD({
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         // Persist session state through the backend data API.
-        fetch(`${BACKEND_API_URL}/api/sessions/save`, {
+        deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/save`, {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -276,7 +277,7 @@ export function InterviewHUD({
         );
 
         // Auto trigger AI note generation through the backend data API.
-        fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
+        deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${sessionId}/ai`, {
           method: "POST",
           headers,
           body: JSON.stringify({ action: "generate_notes" }),

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { openBrowserUrl } from '../utils/browser';
 import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
+import { deviceBoundFetch } from '../utils/deviceBoundFetch';
 import { getStoredToken } from '../utils/store';
 import { CreateSessionModal } from './CreateSessionModal';
 
@@ -82,7 +83,7 @@ export function SessionSelectScreen({
 
       let rawSessions: any[] = [];
       try {
-        const resWeb = await fetch(`${BACKEND_API_URL}/api/sessions?uncompleted_only=true`, {
+        const resWeb = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions?uncompleted_only=true`, {
           headers,
           cache: 'no-store',
         });
@@ -279,7 +280,7 @@ export function SessionSelectScreen({
       if (activeToken) {
         headers['Authorization'] = `Bearer ${activeToken}`;
       }
-      const response = await fetch(`${BACKEND_API_URL}/api/sessions/${sessionId}`, {
+      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${sessionId}`, {
         method: 'DELETE',
         headers,
       });

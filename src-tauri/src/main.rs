@@ -96,6 +96,8 @@ mod macos_panel {
 }
 
 use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use ed25519_dalek::{Signer, SigningKey};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -1162,6 +1164,110 @@ fn request_screen_capture_access() -> Result<bool, String> {
     }
 }
 
+const DEVICE_KEYRING_SERVICE: &str = "com.ghostove.desktop.device-identity";
+const DEVICE_KEYRING_ACCOUNT: &str = "primary-ed25519-seed-v1";
+const DEVICE_ID_KEYRING_ACCOUNT: &str = "primary-device-id-v1";
+const AUTH_TOKEN_KEYRING_SERVICE: &str = "com.ghostove.desktop.auth";
+const AUTH_TOKEN_KEYRING_ACCOUNT: &str = "desktop-session-token-v1";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceIdentity {
+    device_id: String,
+    public_key: String,
+}
+
+fn device_signing_key() -> Result<SigningKey, String> {
+    let entry = keyring::Entry::new(DEVICE_KEYRING_SERVICE, DEVICE_KEYRING_ACCOUNT)
+        .map_err(|error| format!("Could not access the operating-system keychain: {error}"))?;
+    let seed = match entry.get_password() {
+        Ok(value) => URL_SAFE_NO_PAD
+            .decode(value)
+            .map_err(|_| "The saved device identity is invalid. Reinstall or reset this device pairing.".to_string())?,
+        Err(keyring::Error::NoEntry) => {
+            let mut seed = [0u8; 32];
+            getrandom::getrandom(&mut seed)
+                .map_err(|error| format!("Could not generate a device key: {error}"))?;
+            entry
+                .set_password(&URL_SAFE_NO_PAD.encode(seed))
+                .map_err(|error| format!("Could not save the device key in the operating-system keychain: {error}"))?;
+            seed.to_vec()
+        }
+        Err(error) => return Err(format!("Could not read the device key from the operating-system keychain: {error}")),
+    };
+    let seed: [u8; 32] = seed
+        .try_into()
+        .map_err(|_| "The saved device identity has an invalid length. Reset this device pairing.".to_string())?;
+    Ok(SigningKey::from_bytes(&seed))
+}
+
+#[tauri::command]
+fn get_device_identity(existing_device_id: Option<String>) -> Result<DeviceIdentity, String> {
+    let signing_key = device_signing_key()?;
+    let public_key = URL_SAFE_NO_PAD.encode(signing_key.verifying_key().as_bytes());
+    let entry = keyring::Entry::new(DEVICE_KEYRING_SERVICE, DEVICE_ID_KEYRING_ACCOUNT)
+        .map_err(|error| format!("Could not access the operating-system keychain: {error}"))?;
+    let device_id = match entry.get_password() {
+        Ok(saved_id) => saved_id,
+        Err(keyring::Error::NoEntry) => {
+            let id = existing_device_id
+                .filter(|value| !value.trim().is_empty() && value.len() <= 200)
+                .ok_or_else(|| "The desktop device ID is missing. Restart Ghostove Desktop and pair again.".to_string())?;
+            entry
+                .set_password(&id)
+                .map_err(|error| format!("Could not save the device ID in the operating-system keychain: {error}"))?;
+            id
+        }
+        Err(error) => return Err(format!("Could not read the device ID from the operating-system keychain: {error}")),
+    };
+    Ok(DeviceIdentity {
+        device_id,
+        public_key,
+    })
+}
+
+#[tauri::command]
+fn sign_device_challenge(challenge: String) -> Result<String, String> {
+    if challenge.is_empty() || challenge.len() > 512 {
+        return Err("Invalid device authentication challenge.".to_string());
+    }
+    let signature = device_signing_key()?.sign(challenge.as_bytes());
+    Ok(URL_SAFE_NO_PAD.encode(signature.to_bytes()))
+}
+
+#[tauri::command]
+fn get_stored_auth_token() -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(AUTH_TOKEN_KEYRING_SERVICE, AUTH_TOKEN_KEYRING_ACCOUNT)
+        .map_err(|error| format!("Could not access the operating-system keychain: {error}"))?;
+    match entry.get_password() {
+        Ok(token) => Ok(Some(token)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(format!("Could not read the desktop session from the operating-system keychain: {error}")),
+    }
+}
+
+#[tauri::command]
+fn set_stored_auth_token(token: String) -> Result<(), String> {
+    if token.trim().is_empty() || token.len() > 8192 {
+        return Err("Invalid desktop session token.".to_string());
+    }
+    let entry = keyring::Entry::new(AUTH_TOKEN_KEYRING_SERVICE, AUTH_TOKEN_KEYRING_ACCOUNT)
+        .map_err(|error| format!("Could not access the operating-system keychain: {error}"))?;
+    entry
+        .set_password(token.trim())
+        .map_err(|error| format!("Could not save the desktop session in the operating-system keychain: {error}"))
+}
+
+#[tauri::command]
+fn clear_stored_auth_token() -> Result<(), String> {
+    let entry = keyring::Entry::new(AUTH_TOKEN_KEYRING_SERVICE, AUTH_TOKEN_KEYRING_ACCOUNT)
+        .map_err(|error| format!("Could not access the operating-system keychain: {error}"))?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(format!("Could not remove the desktop session from the operating-system keychain: {error}")),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         // Keep protocol callbacks in the running app instead of opening a second
@@ -1203,6 +1309,11 @@ fn main() {
             request_screen_capture_access,
             start_system_audio_capture,
             stop_system_audio_capture,
+            get_device_identity,
+            sign_device_challenge,
+            get_stored_auth_token,
+            set_stored_auth_token,
+            clear_stored_auth_token,
             dev_pairing::take_dev_pairing_token
         ])
         .setup(|app| {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ExternalLink, ShieldCheck, Loader2 } from 'lucide-react';
 import { TopBar } from './TopBar';
 import { WEB_API_URL } from '../utils/config';
-import { getOrCreateDeviceId } from '../utils/device';
+import { getDeviceIdentity } from '../utils/device';
 
 interface AuthScreenProps {
   onManualTokenSubmit?: (token: string) => void;
@@ -19,14 +19,18 @@ export function AuthScreen({
   const handleOpenBrowser = async () => {
     setIsOpeningBrowser(true);
     try {
+      const identity = await getDeviceIdentity();
       const pairingUrl = new URL(webAuthUrl);
-      pairingUrl.searchParams.set('deviceId', getOrCreateDeviceId());
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(pairingUrl.toString());
+      pairingUrl.searchParams.set('deviceId', identity.deviceId);
+      pairingUrl.searchParams.set('devicePublicKey', identity.publicKey);
+      try {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(pairingUrl.toString());
+      } catch {
+        window.open(pairingUrl.toString(), '_blank');
+      }
     } catch {
-      const pairingUrl = new URL(webAuthUrl);
-      pairingUrl.searchParams.set('deviceId', getOrCreateDeviceId());
-      window.open(pairingUrl.toString(), '_blank');
+      window.alert('Ghostove could not access this device’s secure keychain. Check your operating-system keychain settings and try again.');
     } finally {
       setTimeout(() => setIsOpeningBrowser(false), 2000);
     }

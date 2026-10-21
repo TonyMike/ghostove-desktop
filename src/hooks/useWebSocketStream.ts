@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { WS_URL } from '../utils/config';
+import { BACKEND_API_URL, WS_URL } from '../utils/config';
+import { getDeviceIdentity, signDeviceChallenge } from '../utils/device';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'transcribing' | 'generating' | 'quota_exhausted';
 
@@ -103,17 +104,46 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
     }
 
     setStatus('connecting');
-    const fullUrl = `${wsUrl}?token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(fullUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    const connect = async () => {
+      try {
+        const identity = await getDeviceIdentity();
+        const response = await fetch(`${BACKEND_API_URL}/api/auth/device-challenge`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const challengeData = await response.json().catch(() => ({}));
+        if (!response.ok || !challengeData.challengeId || !challengeData.challenge) {
+          throw new Error(challengeData.detail || 'Could not verify this desktop device. Pair it again from Ghostove Web.');
+        }
+        const proof = await signDeviceChallenge(challengeData.challenge);
+        if (cancelled) return;
+        const deviceOs = navigator.userAgent.toLowerCase().includes('mac') ? 'macos' : navigator.userAgent.toLowerCase().includes('win') ? 'windows' : 'linux';
+        const params = new URLSearchParams({
+          token,
+          device_id: identity.deviceId,
+          device_proof_id: challengeData.challengeId,
+          device_proof: proof,
+          device_os: deviceOs,
+          device_name: `${deviceOs} Ghostove Desktop`,
+        });
+        ws = new WebSocket(`${wsUrl}?${params.toString()}`);
+        wsRef.current = ws;
+        attachHandlers(ws);
+      } catch (error) {
+        console.error('[WS Stream] Device authentication failed:', error);
+        setStatus('disconnected');
+      }
+    };
+    function attachHandlers(socket: WebSocket) {
+    socket.onopen = () => {
       console.log('[WS Stream] Connected to backend websocket.');
       setStatus('connected');
       setQuotaExhausted(null);
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         const msgType = data.type;
@@ -174,17 +204,20 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
       }
     };
 
-    ws.onerror = (err) => {
+    socket.onerror = (err) => {
       console.error('[WS Stream] WebSocket error:', err);
     };
 
-    ws.onclose = (event) => {
+    socket.onclose = (event) => {
       console.log(`[WS Stream] WebSocket closed code: ${event.code}`);
       setStatus('disconnected');
     };
+    }
 
+    void connect();
 
     return () => {
+      cancelled = true;
       if (ws) ws.close();
     };
   }, [token, wsUrl]);
