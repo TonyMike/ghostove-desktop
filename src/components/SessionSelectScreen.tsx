@@ -29,6 +29,8 @@ export interface SessionItem {
   language?: string;
   resume_id?: string | null;
   document_id?: string | null;
+  interview_mode?: string | null;
+  ai_instructions?: string;
   status?: string;
   mode: string;
   duration_seconds: number;
@@ -138,6 +140,8 @@ export function SessionSelectScreen({
             language: s.language || "English",
             resume_id: s.resume_id || null,
             document_id: s.document_id || null,
+            interview_mode: s.interview_mode || null,
+            ai_instructions: s.ai_instructions || '',
             status: s.status || "not_started",
             mode: s.mode || "Interview",
             duration_seconds: s.duration_seconds || 0,

@@ -30,6 +30,8 @@ interface MockInterviewHUDProps {
   token: string;
   sessionId?: string | null;
   language?: string;
+  interviewMode?: string;
+  aiInstructions?: string;
   jobTitle?: string;
   onBackToMenu?: () => void;
   onSwitchToLive?: () => void;
@@ -49,22 +51,82 @@ interface EvaluationResult {
   feedback: string;
 }
 
+const FALLBACK_QUESTIONS: Record<string, string[]> = {
+  behavioral: [
+    'Tell me about a time you had to resolve a disagreement with a teammate.',
+    'Describe a challenging goal you owned and how you delivered it.',
+    'Tell me about a mistake or setback and what you learned from it.',
+    'Give an example of working through an ambiguous problem.',
+    'Describe a time you helped a team succeed under pressure.',
+  ],
+  technical: [
+    'Explain a technical decision you made and the tradeoffs you considered.',
+    'How would you investigate a performance problem in a production system?',
+    'Describe an architecture you have worked with and how its parts interact.',
+    'How do you balance reliability, speed, and maintainability?',
+    'Tell me about a technical concept that is important for this role.',
+  ],
+  coding: [
+    'How would you find the first non-repeating character in a string?',
+    'How would you detect a cycle in a linked list?',
+    'Design an LRU cache and explain its time and space complexity.',
+    'How would you merge overlapping intervals?',
+    'How would you find the top K most frequent values in a list?',
+  ],
+  system_design: [
+    'Design a service that accepts and processes image uploads at scale.',
+    'How would you design a real-time notification system?',
+    'Design a rate limiter for a multi-tenant API.',
+    'How would you make a URL shortening service reliable at high traffic?',
+    'Design a system for ingesting and querying application events.',
+  ],
+  product_role_fit: [
+    'How would you decide which user problem to solve first?',
+    'Tell me about a product or project decision and the evidence behind it.',
+    'How would you measure whether a change succeeded?',
+    'Describe how you work with partners across different disciplines.',
+    'What about this role matches the work you want to do next?',
+  ],
+  case: [
+    'A product’s revenue has declined. How would you diagnose the cause?',
+    'Estimate the annual market for a new service in a city you know.',
+    'A company is considering entering a new market. How would you assess it?',
+    'How would you evaluate a proposed price increase?',
+    'A service is growing quickly but becoming less profitable. What would you investigate?',
+  ],
+  recruiter_screen: [
+    'Walk me through your background and the experience most relevant to this role.',
+    'What interests you about this position and company?',
+    'What kind of work are you hoping to do in your next role?',
+    'What are your priorities when evaluating a new opportunity?',
+    'What questions do you have about the role or interview process?',
+  ],
+};
+
+const GENERAL_FALLBACK_QUESTIONS = [
+  'Can you describe a challenging project that is relevant to this role?',
+  'How do you approach solving an unfamiliar problem?',
+  'Tell me about a time you made an important tradeoff.',
+  'How do you collaborate when people have different points of view?',
+  'What interests you about this role?',
+];
+
+function getFallbackQuestions(interviewMode?: string): string[] {
+  return FALLBACK_QUESTIONS[interviewMode || ''] || GENERAL_FALLBACK_QUESTIONS;
+}
+
 export function MockInterviewHUD({
   token,
   sessionId,
   language = 'English',
+  interviewMode,
+  aiInstructions,
   jobTitle = 'Senior Software Engineer',
   onBackToMenu,
   onSwitchToLive,
   onLogout,
 }: MockInterviewHUDProps) {
-  const [questions, setQuestions] = useState<string[]>([
-    'Can you describe a challenging architectural or technical project you led recently?',
-    'Tell me about a time you had to diagnose and resolve a severe production outage under high pressure.',
-    'How do you approach performance optimization, caching strategies, and latency reduction in distributed systems?',
-    'Describe a situation where you had a strong technical disagreement with a team member. How did you resolve it?',
-    'Why are you particularly interested in excelling in this engineering role?'
-  ]);
+  const [questions, setQuestions] = useState<string[]>(() => getFallbackQuestions(interviewMode));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [candidateResponse, setCandidateResponse] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -112,7 +174,7 @@ export function MockInterviewHUD({
         const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),
+          body: JSON.stringify({ job_title: jobTitle, session_id: sessionId, interview_mode: interviewMode, ai_instructions: aiInstructions }),
         });
 
         if (res.ok) {
@@ -292,6 +354,8 @@ export function MockInterviewHUD({
           candidate_response: textToEvaluate,
           model: 'gemini-3.5-flash',
           session_id: sessionId,
+          interview_mode: interviewMode,
+          ai_instructions: aiInstructions,
         }),
       });
 
@@ -364,6 +428,8 @@ export function MockInterviewHUD({
         headers,
         body: JSON.stringify({
           session_id: sessionId,
+          interview_mode: interviewMode,
+          ai_instructions: aiInstructions,
           status: 'completed',
           duration_seconds: durationSeconds,
           transcript: formattedTranscript,
@@ -412,6 +478,8 @@ export function MockInterviewHUD({
           question_text: questions[currentIndex],
           model: 'gemini-3.5-flash',
           session_id: sessionId,
+          interview_mode: interviewMode,
+          ai_instructions: aiInstructions,
         }),
       });
 
@@ -421,10 +489,9 @@ export function MockInterviewHUD({
       }
     } catch (e) {
       setIdealAnswer(
-        "**Situation**: In our real-time high-throughput message processing pipeline, a memory leak caused worker nodes to run OOM during traffic surges.\n\n" +
-        "**Task**: As principal engineer, I spearheaded diagnosis and remediation to prevent customer SLA degradation.\n\n" +
-        "**Action**: I captured heap allocations using pprof, isolated an unclosed streaming HTTP body, implemented buffer pooling with sync.Pool, and added automated memory thresholds.\n\n" +
-        "**Result**: Dropped memory footprint by 70%, eliminated OOM crashes completely, and saved $14,000/month in cloud infrastructure costs."
+        interviewMode === 'behavioral'
+          ? '**Situation:** [Describe the real situation.]\n\n**Task:** [What were you responsible for?]\n\n**Action:** [What did you personally do?]\n\n**Result:** [Share a verified result or what changed.]'
+          : 'I could not generate a sample from this session context. Build your answer from your real experience and the role requirements; use placeholders for any details you do not have.',
       );
     } finally {
       setLoadingIdeal(false);
@@ -468,7 +535,7 @@ export function MockInterviewHUD({
       const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/mock-interview/generate-questions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ job_title: jobTitle, session_id: sessionId }),
+        body: JSON.stringify({ job_title: jobTitle, session_id: sessionId, interview_mode: interviewMode, ai_instructions: aiInstructions }),
       });
       if (res.ok) {
         const data = await res.json();

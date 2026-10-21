@@ -32,6 +32,8 @@ interface UseRealAudioListenerProps {
   selectedLanguage?: string;
   wsUrl?: string;
   sessionId?: string | null;
+  interviewMode?: string | null;
+  aiInstructions?: string;
   initialSharedStream?: MediaStream | null;
   startSharedAudioOnConnect?: boolean;
   autoAnswer?: boolean;
@@ -54,6 +56,8 @@ export function useRealAudioListener({
   selectedLanguage = 'English',
   wsUrl = WS_URL,
   sessionId,
+  interviewMode,
+  aiInstructions,
   initialSharedStream,
   startSharedAudioOnConnect = false,
   autoAnswer = true,
@@ -936,6 +940,8 @@ export function useRealAudioListener({
             source: 'meeting_audio',
             enabled: isSharedAudioActiveRef.current,
             auto_answer: autoAnswerRef.current,
+            interview_mode: interviewMode || null,
+            ai_instructions: aiInstructions || '',
           }));
         };
 
@@ -1160,7 +1166,7 @@ export function useRealAudioListener({
         wsRef.current.close();
       }
     };
-  }, [token, wsUrl, sessionId, selectedLanguage, appendFinalTranscript, quotaRefreshKey]);
+  }, [token, wsUrl, sessionId, interviewMode, aiInstructions, selectedLanguage, appendFinalTranscript, quotaRefreshKey]);
 
   // Keep the candidate mic off until the user explicitly enables it.
   useEffect(() => {

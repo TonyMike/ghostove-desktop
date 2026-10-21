@@ -18,6 +18,12 @@ import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
 import { deviceBoundFetch } from '../utils/deviceBoundFetch';
 import { openBrowserUrl } from '../utils/browser';
 import { getStoredToken } from '../utils/store';
+import {
+  buildInterviewInstructions,
+  getInterviewFocus,
+  INTERVIEW_FOCUS_OPTIONS,
+  InterviewFocusId,
+} from '../utils/interviewFocus';
 
 interface ResumeOption {
   id: string;
@@ -62,6 +68,7 @@ export function CreateSessionModal({
 
   // Step 1: Details
   const [sessionType, setSessionType] = useState<'interview' | 'mock'>('interview');
+  const [interviewFocus, setInterviewFocus] = useState<InterviewFocusId | ''>('');
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const [jobDescription, setJobDescription] = useState('');
@@ -147,6 +154,7 @@ export function CreateSessionModal({
     setRole('');
     setJobDescription('');
     setJobLink('');
+    setInterviewFocus('');
     setErrors({});
     setSelectedResumeId('');
     setSelectedDocumentId('');
@@ -261,6 +269,7 @@ export function CreateSessionModal({
 
     const payload = {
       session_type: sessionType,
+      interview_mode: interviewFocus || null,
       company_name: company.trim(),
       role: role.trim(),
       job_link: jobLink.trim(),
@@ -269,7 +278,7 @@ export function CreateSessionModal({
       document_id: selectedDocumentId || null,
       language: language,
       model: model,
-      ai_instructions: aiInstructions.trim(),
+      ai_instructions: buildInterviewInstructions(interviewFocus, aiInstructions),
       auto_generate: false,
       save_transcript: saveTranscript,
     };
@@ -302,6 +311,8 @@ export function CreateSessionModal({
           resume_id: selectedResumeId || null,
           document_id: selectedDocumentId || null,
           mode: sessionType,
+          interview_mode: interviewFocus || null,
+          ai_instructions: buildInterviewInstructions(interviewFocus, aiInstructions),
           language,
           model: model,
           duration_seconds: 0,
@@ -403,6 +414,26 @@ export function CreateSessionModal({
                     <span>Mock Interview</span>
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="interview-focus" className="font-semibold text-slate-700 dark:text-slate-300">
+                  Interview focus <span className="font-normal text-slate-400">(Optional)</span>
+                </label>
+                <select
+                  id="interview-focus"
+                  value={interviewFocus}
+                  onChange={(event) => setInterviewFocus(event.target.value as InterviewFocusId | '')}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 transition-colors focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                >
+                  <option value="">No specific focus</option>
+                  {INTERVIEW_FOCUS_OPTIONS.map((focus) => (
+                    <option key={focus.id} value={focus.id}>{focus.label}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400" aria-live="polite">
+                  {getInterviewFocus(interviewFocus)?.description || 'Ghostove will use your role and job description for general interview help.'}
+                </p>
               </div>
 
               {/* Company Name */}

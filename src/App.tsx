@@ -43,16 +43,31 @@ type InterviewTimeStatus = InterviewTimeCheck | 'checking';
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [keychainNoticeComplete, setKeychainNoticeComplete] = useState(hasSeenKeychainAccessNotice);
-  const [view, setView] = useState<'audio-onboarding' | 'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
-  const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
-  const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
-  const [startSharedAudioOnConnect, setStartSharedAudioOnConnect] = useState(false);
+  const [keychainNoticeComplete, setKeychainNoticeComplete] = useState(
+    hasSeenKeychainAccessNotice,
+  );
+  const [view, setView] = useState<
+    | "audio-onboarding"
+    | "session-select"
+    | "connect-session"
+    | "plan-required"
+    | "active-session"
+  >("session-select");
+  const [selectedSession, setSelectedSession] = useState<SessionItem | null>(
+    null,
+  );
+  const [sharedAudioStream, setSharedAudioStream] =
+    useState<MediaStream | null>(null);
+  const [startSharedAudioOnConnect, setStartSharedAudioOnConnect] =
+    useState(false);
   const [showScreenPosition, setShowScreenPosition] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [interviewTimeStatus, setInterviewTimeStatus] = useState<InterviewTimeStatus>('checking');
-  const [timeCheckIssue, setTimeCheckIssue] = useState<'exhausted' | 'unavailable'>('exhausted');
-  const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
+  const [interviewTimeStatus, setInterviewTimeStatus] =
+    useState<InterviewTimeStatus>("checking");
+  const [timeCheckIssue, setTimeCheckIssue] = useState<
+    "exhausted" | "unavailable"
+  >("exhausted");
+  const [hudMode, setHudMode] = useState<"live" | "mock">("live");
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const pairingTokenReceived = useRef(false);
   const keychainNoticeCompleteRef = useRef(keychainNoticeComplete);
@@ -85,65 +100,87 @@ function AppContent() {
   // Global hotkey: Cmd+Shift+S (or Ctrl+Shift+S) to instantly switch panel to cursor screen
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (view === 'active-session') return; // In interview session, ⌘⇧S captures screen for Vision AI
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+      if (view === "active-session") return; // In interview session, ⌘⇧S captures screen for Vision AI
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        (e.key === "s" || e.key === "S")
+      ) {
         e.preventDefault();
         await moveToCursorScreen();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [view]);
 
-  const checkUserAccess = useCallback(async (userToken: string | null): Promise<InterviewTimeCheck> => {
-    if (!userToken) {
-      setInterviewTimeStatus('unavailable');
-      return 'unavailable';
-    }
-    try {
-      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/credits`, {
-        headers: { Authorization: `Bearer ${userToken}` },
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        setInterviewTimeStatus('unavailable');
-        return 'unavailable';
+  const checkUserAccess = useCallback(
+    async (userToken: string | null): Promise<InterviewTimeCheck> => {
+      if (!userToken) {
+        setInterviewTimeStatus("unavailable");
+        return "unavailable";
       }
+      try {
+        const response = await deviceBoundFetch(
+          `${BACKEND_API_URL}/api/credits`,
+          {
+            headers: { Authorization: `Bearer ${userToken}` },
+            cache: "no-store",
+          },
+        );
+        if (!response.ok) {
+          setInterviewTimeStatus("unavailable");
+          return "unavailable";
+        }
 
-      const credits = await response.json();
-      const remainingSeconds = credits.is_unlimited
-        ? Number(credits.daily_seconds_remaining)
-        : Number(credits.total_seconds_remaining ?? (
-            (credits.free_demo_seconds_remaining || 0) + (credits.paid_seconds_balance || 0)
-          ));
-      if (!Number.isFinite(remainingSeconds)) {
-        setInterviewTimeStatus('unavailable');
-        return 'unavailable';
+        const credits = await response.json();
+        const remainingSeconds = credits.is_unlimited
+          ? Number(credits.daily_seconds_remaining)
+          : Number(
+              credits.total_seconds_remaining ??
+                (credits.free_demo_seconds_remaining || 0) +
+                  (credits.paid_seconds_balance || 0),
+            );
+        if (!Number.isFinite(remainingSeconds)) {
+          setInterviewTimeStatus("unavailable");
+          return "unavailable";
+        }
+
+        const result = remainingSeconds > 0 ? "available" : "exhausted";
+        setInterviewTimeStatus(result);
+        return result;
+      } catch (err) {
+        console.warn(
+          "[Ghostove Desktop] Could not verify remaining interview time:",
+          err,
+        );
+        setInterviewTimeStatus("unavailable");
+        return "unavailable";
       }
+    },
+    [],
+  );
 
-      const result = remainingSeconds > 0 ? 'available' : 'exhausted';
-      setInterviewTimeStatus(result);
-      return result;
-    } catch (err) {
-      console.warn('[Ghostove Desktop] Could not verify remaining interview time:', err);
-      setInterviewTimeStatus('unavailable');
-      return 'unavailable';
-    }
-  }, []);
-
-  const verifyToken = useCallback(async (tokenToVerify: string): Promise<boolean> => {
-    try {
-      const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/session/verify-token?token=${encodeURIComponent(tokenToVerify)}`);
-      if (res.ok) {
-        const data = await res.json();
-        return data.valid === true;
+  const verifyToken = useCallback(
+    async (tokenToVerify: string): Promise<boolean> => {
+      try {
+        const res = await deviceBoundFetch(
+          `${BACKEND_API_URL}/api/session/verify-token?token=${encodeURIComponent(tokenToVerify)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          return data.valid === true;
+        }
+      } catch (e) {
+        console.warn(
+          "[Ghostove Desktop] Token verification network check offline, trusting local token.",
+        );
+        return true;
       }
-    } catch (e) {
-      console.warn('[Ghostove Desktop] Token verification network check offline, trusting local token.');
-      return true;
-    }
-    return false;
-  }, []);
+      return false;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!keychainNoticeComplete) return;
@@ -155,7 +192,7 @@ function AppContent() {
         if (!pairingTokenReceived.current) {
           if (isValid) {
             setToken(stored);
-            if (!isAudioOnboardingComplete()) setView('audio-onboarding');
+            if (!isAudioOnboardingComplete()) setView("audio-onboarding");
             checkUserAccess(stored);
           } else {
             await clearStoredToken();
@@ -170,7 +207,7 @@ function AppContent() {
 
   const handleKeychainNoticeContinue = () => {
     try {
-      localStorage.setItem(KEYCHAIN_NOTICE_KEY, 'true');
+      localStorage.setItem(KEYCHAIN_NOTICE_KEY, "true");
     } catch {
       // Continue this session even if the non-secret notice preference cannot be saved.
     }
@@ -191,110 +228,131 @@ function AppContent() {
     if (queuedToken) void handleTokenReceived(queuedToken);
   };
 
-  const handleTokenReceived = useCallback(async (newToken: string) => {
-    pairingTokenReceived.current = true;
-    if (!keychainNoticeCompleteRef.current) {
-      pendingKeychainToken.current = newToken;
-      return;
-    }
-    await setStoredToken(newToken);
-    setToken(newToken);
-    setInterviewTimeStatus('checking');
-    void checkUserAccess(newToken);
-    setView(isAudioOnboardingComplete() ? 'session-select' : 'audio-onboarding');
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const win = getCurrentWindow();
-      await win.show();
-      await win.unminimize();
-      await win.setFocus();
-    } catch (err) {
-      console.warn('[Ghostove Desktop] Could not focus window after local pairing:', err);
-    }
-  }, [checkUserAccess]);
-
-  const handleDeepLink = useCallback(async (payload: DeepLinkPayload) => {
-    if (!keychainNoticeCompleteRef.current) {
-      pendingDeepLink.current = payload;
-      return;
-    }
-
-    console.log('[Ghostove Desktop] Deep link received:', {
-      action: payload.action,
-      sessionId: payload.sessionId,
-      hasToken: Boolean(payload.token),
-    });
-
-    if (payload.token) {
-      await setStoredToken(payload.token);
-      setToken(payload.token);
-      setInterviewTimeStatus('checking');
-    }
-
-    if (!isAudioOnboardingComplete()) {
-      setView('audio-onboarding');
-      return;
-    }
-
-    // Bring desktop app window to foreground, unminimize, and focus
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const win = getCurrentWindow();
-      await win.show();
-      await win.unminimize();
-      await win.setFocus();
-    } catch (err) {
-      console.warn('[Ghostove Desktop] Could not focus window:', err);
-    }
-
-    // Always trigger session refresh whenever any deep link arrives
-    triggerSessionRefresh();
-
-    // If starting a session or specified a session id, check access first
-    if (
-      payload.action === 'start-session' ||
-      payload.action === 'session' ||
-      payload.sessionId
-    ) {
-      setIsCollapsed(false);
-      let sessionData: SessionItem = {
-        id: payload.sessionId || 'session-1',
-        title: 'Interview Session',
-        company_name: 'Interview',
-        mode: 'Interview',
-        duration_seconds: 0,
-        created_at: new Date().toISOString(),
-      };
-      if (payload.sessionId) {
-        // Fetch session details from cloud web API
-        try {
-          const authHeaders = (payload.token || token) ? { Authorization: `Bearer ${payload.token || token}` } : undefined;
-          const res = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${payload.sessionId}`, { headers: authHeaders });
-          if (res.ok) {
-            const data = await res.json();
-            sessionData = data.session || data;
-          }
-        } catch {}
-      }
-      setSelectedSession(sessionData);
-
-      const timeCheck = await checkUserAccess(payload.token || token);
-      if (timeCheck === 'exhausted') {
-        setView('session-select');
+  const handleTokenReceived = useCallback(
+    async (newToken: string) => {
+      pairingTokenReceived.current = true;
+      if (!keychainNoticeCompleteRef.current) {
+        pendingKeychainToken.current = newToken;
         return;
       }
-      if (timeCheck === 'unavailable') {
-        setTimeCheckIssue(timeCheck);
-        setView('plan-required');
+      await setStoredToken(newToken);
+      setToken(newToken);
+      setInterviewTimeStatus("checking");
+      void checkUserAccess(newToken);
+      setView(
+        isAudioOnboardingComplete() ? "session-select" : "audio-onboarding",
+      );
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        await win.show();
+        await win.unminimize();
+        await win.setFocus();
+      } catch (err) {
+        console.warn(
+          "[Ghostove Desktop] Could not focus window after local pairing:",
+          err,
+        );
+      }
+    },
+    [checkUserAccess],
+  );
+
+  const handleDeepLink = useCallback(
+    async (payload: DeepLinkPayload) => {
+      if (!keychainNoticeCompleteRef.current) {
+        pendingDeepLink.current = payload;
         return;
       }
 
-      setView('connect-session');
-    } else if (payload.action === 'auth' || payload.action === 'open' || payload.action === 'refresh') {
-      if (payload.token) void checkUserAccess(payload.token);
-      setView('session-select');
-    }
-  }, [checkUserAccess, token, triggerSessionRefresh]);
+      console.log("[Ghostove Desktop] Deep link received:", {
+        action: payload.action,
+        sessionId: payload.sessionId,
+        hasToken: Boolean(payload.token),
+      });
+
+      if (payload.token) {
+        await setStoredToken(payload.token);
+        setToken(payload.token);
+        setInterviewTimeStatus("checking");
+      }
+
+      if (!isAudioOnboardingComplete()) {
+        setView("audio-onboarding");
+        return;
+      }
+
+      // Bring desktop app window to foreground, unminimize, and focus
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        await win.show();
+        await win.unminimize();
+        await win.setFocus();
+      } catch (err) {
+        console.warn("[Ghostove Desktop] Could not focus window:", err);
+      }
+
+      // Always trigger session refresh whenever any deep link arrives
+      triggerSessionRefresh();
+
+      // If starting a session or specified a session id, check access first
+      if (
+        payload.action === "start-session" ||
+        payload.action === "session" ||
+        payload.sessionId
+      ) {
+        setIsCollapsed(false);
+        let sessionData: SessionItem = {
+          id: payload.sessionId || "session-1",
+          title: "Interview Session",
+          company_name: "Interview",
+          mode: "Interview",
+          duration_seconds: 0,
+          created_at: new Date().toISOString(),
+        };
+        if (payload.sessionId) {
+          // Fetch session details from cloud web API
+          try {
+            const authHeaders =
+              payload.token || token
+                ? { Authorization: `Bearer ${payload.token || token}` }
+                : undefined;
+            const res = await deviceBoundFetch(
+              `${BACKEND_API_URL}/api/sessions/${payload.sessionId}`,
+              { headers: authHeaders },
+            );
+            if (res.ok) {
+              const data = await res.json();
+              sessionData = data.session || data;
+            }
+          } catch {}
+        }
+        setSelectedSession(sessionData);
+
+        const timeCheck = await checkUserAccess(payload.token || token);
+        if (timeCheck === "exhausted") {
+          setView("session-select");
+          return;
+        }
+        if (timeCheck === "unavailable") {
+          setTimeCheckIssue(timeCheck);
+          setView("plan-required");
+          return;
+        }
+
+        setView("connect-session");
+      } else if (
+        payload.action === "auth" ||
+        payload.action === "open" ||
+        payload.action === "refresh"
+      ) {
+        if (payload.token) void checkUserAccess(payload.token);
+        setView("session-select");
+      }
+    },
+    [checkUserAccess, token, triggerSessionRefresh],
+  );
 
   // Listen for ghostove:// protocol deep link
   useDeepLink({
@@ -311,20 +369,25 @@ function AppContent() {
     async function listenForDevPairing() {
       try {
         const [{ listen }, { invoke }] = await Promise.all([
-          import('@tauri-apps/api/event'),
-          import('@tauri-apps/api/core'),
+          import("@tauri-apps/api/event"),
+          import("@tauri-apps/api/core"),
         ]);
         if (cancelled) return;
 
-        unlisten = await listen<string>('dev-pairing-token', (event) => {
+        unlisten = await listen<string>("dev-pairing-token", (event) => {
           if (event.payload) void handleTokenReceived(event.payload);
         });
 
         // The local bridge buffers the token in case pairing completes before this listener mounts.
-        const pendingToken = await invoke<string | null>('take_dev_pairing_token');
+        const pendingToken = await invoke<string | null>(
+          "take_dev_pairing_token",
+        );
         if (pendingToken) await handleTokenReceived(pendingToken);
       } catch (error) {
-        console.warn('[Ghostove Desktop] Dev pairing listener is unavailable:', error);
+        console.warn(
+          "[Ghostove Desktop] Dev pairing listener is unavailable:",
+          error,
+        );
       }
     }
 
@@ -338,7 +401,7 @@ function AppContent() {
   const handleLogout = async () => {
     await clearStoredToken();
     setToken(null);
-    setView('session-select');
+    setView("session-select");
   };
 
   const handleGetMoreTimeOrPlan = () => {
@@ -350,39 +413,44 @@ function AppContent() {
     [checkUserAccess, token],
   );
 
-  const handleSelectSession = async (sessionId: string, session?: SessionItem) => {
-    const isMock = ((session?.mode || '') as string).toLowerCase().includes('mock');
-    setHudMode(isMock ? 'mock' : 'live');
+  const handleSelectSession = async (
+    sessionId: string,
+    session?: SessionItem,
+  ) => {
+    const isMock = ((session?.mode || "") as string)
+      .toLowerCase()
+      .includes("mock");
+    setHudMode(isMock ? "mock" : "live");
     const currentSession = session || {
       id: sessionId,
-      title: 'Interview Session',
-      company_name: 'Interview',
-      mode: isMock ? 'mock' : 'interview',
+      title: "Interview Session",
+      company_name: "Interview",
+      mode: isMock ? "mock" : "interview",
       duration_seconds: 0,
       created_at: new Date().toISOString(),
     };
     setSelectedSession(currentSession);
 
     const timeCheck = await checkUserAccess(token);
-    if (timeCheck === 'exhausted') {
+    if (timeCheck === "exhausted") {
       // Keep the user on the session list, where the launch action becomes Purchase time.
       return;
     }
-    if (timeCheck === 'unavailable') {
+    if (timeCheck === "unavailable") {
       setTimeCheckIssue(timeCheck);
-      setView('plan-required');
+      setView("plan-required");
       return;
     }
 
-    setView('connect-session');
+    setView("connect-session");
   };
 
   // Keep audio setup compact and fixed; restore normal resizing on other screens.
   useEffect(() => {
-    if (view !== 'active-session') {
+    if (view !== "active-session") {
       void (async () => {
-        await setWindowResizable(view !== 'audio-onboarding');
-        if (view === 'audio-onboarding') await resizeWindow(880, 600);
+        await setWindowResizable(view !== "audio-onboarding");
+        if (view === "audio-onboarding") await resizeWindow(880, 600);
         else if (isCollapsed) await resizeWindow(440, 48);
         else await resizeWindow(440, 600);
       })();
@@ -397,7 +465,7 @@ function AppContent() {
     return (
       <>
         <div
-          className="flex h-full w-full items-center justify-center select-none bg-[#f4f4f0] dark:bg-slate-950"
+          className="flex h-full w-full items-center apple-squircle justify-center select-none bg-[#f4f4f0] dark:bg-slate-950"
           role="status"
           aria-label="Loading Ghostove"
         >
@@ -407,12 +475,10 @@ function AppContent() {
             className="h-14 w-14 animate-pulse motion-reduce:animate-none"
           />
         </div>
-        <MandatoryUpdater deferWhileSessionActive={view === 'active-session'} />
+        <MandatoryUpdater deferWhileSessionActive={view === "active-session"} />
       </>
     );
-  }
-
-  // Screen 1: Unauthenticated
+  } // Screen 1: Unauthenticated
   if (!token) {
     return (
       <>
@@ -425,12 +491,12 @@ function AppContent() {
             onClose={() => setShowScreenPosition(false)}
           />
         </div>
-        <MandatoryUpdater deferWhileSessionActive={view === 'active-session'} />
+        <MandatoryUpdater deferWhileSessionActive={view === "active-session"} />
       </>
     );
   }
 
-  if (view === 'active-session') {
+  if (view === "active-session") {
     return (
       <>
         <div className="w-full h-full relative  overflow-x-hidden">
@@ -439,6 +505,8 @@ function AppContent() {
               token={token}
               sessionId={selectedSession?.id}
               language={selectedSession?.language || "English"}
+              interviewMode={selectedSession?.interview_mode || undefined}
+              aiInstructions={selectedSession?.ai_instructions || undefined}
               jobTitle={
                 selectedSession?.title ||
                 selectedSession?.company_name ||
@@ -458,6 +526,7 @@ function AppContent() {
               token={token}
               sessionId={selectedSession?.id}
               language={selectedSession?.language || "English"}
+              interviewMode={selectedSession?.interview_mode || undefined}
               initialSharedStream={sharedAudioStream}
               startSharedAudioOnConnect={startSharedAudioOnConnect}
               onLogout={handleLogout}
@@ -492,10 +561,10 @@ function AppContent() {
     );
   }
 
-  if (view === 'audio-onboarding') {
+  if (view === "audio-onboarding") {
     return (
       <>
-        <AudioOnboardingScreen onComplete={() => setView('session-select')} />
+        <AudioOnboardingScreen onComplete={() => setView("session-select")} />
         <MandatoryUpdater deferWhileSessionActive={false} />
       </>
     );
