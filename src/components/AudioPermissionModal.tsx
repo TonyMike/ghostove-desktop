@@ -122,7 +122,7 @@ export function AudioPermissionModal({
         });
         setErrorMsg(
           systemMicGranted
-            ? 'macOS already allows Ghostove Desktop to use the microphone, but Ghostove’s embedded webview denied this request. Quit Ghostove completely and reopen it. If it still fails, contact support and include this message.'
+            ? 'macOS allows Ghostove Desktop to use the microphone, but this installed version could not open microphone input. Update Ghostove Desktop and try again. If the latest version still fails, contact support and include this message.'
             : nativeMacPlatform
               ? 'macOS reports that Ghostove Desktop does not have microphone access. Enable it in System Settings, quit Ghostove completely, then reopen it and try again.'
               : 'Ghostove could not access the microphone. Check your operating system’s microphone privacy settings and allow microphone access for Ghostove, then try again.'

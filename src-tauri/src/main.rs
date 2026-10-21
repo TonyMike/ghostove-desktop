@@ -1353,7 +1353,7 @@ fn main() {
                 std::thread::spawn(move || {
                     let mut candidate_monitor: Option<usize> = None;
                     let mut consecutive_ticks: u32 = 0;
-                    let mut last_workspace_refresh = std::time::Instant::now();
+                    let last_workspace_refresh = std::time::Instant::now();
 
                     loop {
                         std::thread::sleep(std::time::Duration::from_millis(250));
