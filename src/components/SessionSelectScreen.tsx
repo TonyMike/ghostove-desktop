@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   ArrowUpDown,
@@ -13,12 +13,12 @@ import {
   Sparkles,
   RotateCw,
   BookOpen,
-} from 'lucide-react';
-import { openBrowserUrl } from '../utils/browser';
-import { BACKEND_API_URL, WEB_API_URL } from '../utils/config';
-import { deviceBoundFetch } from '../utils/deviceBoundFetch';
-import { getStoredToken } from '../utils/store';
-import { CreateSessionModal } from './CreateSessionModal';
+} from "lucide-react";
+import { openBrowserUrl } from "../utils/browser";
+import { BACKEND_API_URL, WEB_API_URL } from "../utils/config";
+import { deviceBoundFetch } from "../utils/deviceBoundFetch";
+import { getStoredToken } from "../utils/store";
+import { CreateSessionModal } from "./CreateSessionModal";
 
 export interface SessionItem {
   id: string;
@@ -40,7 +40,7 @@ export interface SessionItem {
 interface SessionSelectScreenProps {
   token?: string | null;
   refreshTrigger?: number;
-  interviewTimeStatus: 'available' | 'exhausted' | 'unavailable' | 'checking';
+  interviewTimeStatus: "available" | "exhausted" | "unavailable" | "checking";
   onPurchaseTime: () => void;
   onRefreshTime: () => Promise<unknown>;
   onStartSession: (sessionId: string, session?: SessionItem) => void;
@@ -59,9 +59,11 @@ export function SessionSelectScreen({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(
+    null,
+  );
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Pull-to-refresh state
@@ -71,73 +73,91 @@ export function SessionSelectScreen({
   const mouseStartY = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const loadSessions = useCallback(async (silent = false) => {
-    try {
-      if (!silent) {
-        setIsRefreshing(true);
-      }
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      let rawSessions: any[] = [];
+  const loadSessions = useCallback(
+    async (silent = false) => {
       try {
-        const resWeb = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions?uncompleted_only=true`, {
-          headers,
-          cache: 'no-store',
-        });
-        if (resWeb.ok) {
-          const dataWeb = await resWeb.json();
-          rawSessions = dataWeb.sessions || [];
-          setLoadError(null);
-        } else {
-          console.warn('[SessionSelect] Session API returned:', resWeb.status);
+        if (!silent) {
+          setIsRefreshing(true);
+        }
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        let rawSessions: any[] = [];
+        try {
+          const resWeb = await deviceBoundFetch(
+            `${BACKEND_API_URL}/api/sessions?uncompleted_only=true`,
+            {
+              headers,
+              cache: "no-store",
+            },
+          );
+          if (resWeb.ok) {
+            const dataWeb = await resWeb.json();
+            rawSessions = dataWeb.sessions || [];
+            setLoadError(null);
+          } else {
+            console.warn(
+              "[SessionSelect] Session API returned:",
+              resWeb.status,
+            );
+            setLoadError(
+              resWeb.status === 401 || resWeb.status === 403
+                ? "Your desktop connection needs to be refreshed. Pair the app with your web account again."
+                : "Could not sync sessions from Ghostove Backend. Check your connection and try again.",
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "[SessionSelect] Error fetching sessions from web API:",
+            err,
+          );
           setLoadError(
-            resWeb.status === 401 || resWeb.status === 403
-              ? 'Your desktop connection needs to be refreshed. Pair the app with your web account again.'
-              : 'Could not sync sessions from Ghostove Backend. Check your connection and try again.'
+            "Could not reach Ghostove Backend. Check your connection and try again.",
           );
         }
-      } catch (err) {
-        console.warn('[SessionSelect] Error fetching sessions from web API:', err);
-        setLoadError('Could not reach Ghostove Backend. Check your connection and try again.');
+
+        // Filter out completed sessions - completed sessions cannot be retaken in desktop HUD
+        const isCompleted = (s: any) =>
+          s.status === "completed" ||
+          (typeof s.duration_seconds === "number" && s.duration_seconds > 0) ||
+          (typeof s.transcript === "string" &&
+            s.transcript.trim().length > 0) ||
+          (typeof s.transcript_snippet === "string" &&
+            s.transcript_snippet.trim().length > 0);
+
+        const apiSessions: SessionItem[] = rawSessions
+          .filter((s: any) => !isCompleted(s))
+          .map((s: any) => ({
+            id: s.id,
+            title: s.title || s.company_name || "Interview Session",
+            company_name: s.company_name || s.title || "Company",
+            job_description: s.job_description || s.transcript_snippet || "",
+            role: s.role || "",
+            language: s.language || "English",
+            resume_id: s.resume_id || null,
+            document_id: s.document_id || null,
+            status: s.status || "not_started",
+            mode: s.mode || "Interview",
+            duration_seconds: s.duration_seconds || 0,
+            save_transcript: s.save_transcript !== false,
+            created_at: s.created_at || new Date().toISOString(),
+          }));
+
+        setSessions(apiSessions);
+      } catch {
+        setLoadError(
+          "Could not sync sessions from Ghostove Backend. Check your connection and try again.",
+        );
+        if (!silent) setSessions([]);
+      } finally {
+        setLoading(false);
+        setIsRefreshing(false);
       }
-
-      // Filter out completed sessions - completed sessions cannot be retaken in desktop HUD
-      const isCompleted = (s: any) =>
-        s.status === 'completed' ||
-        (typeof s.duration_seconds === 'number' && s.duration_seconds > 0) ||
-        (typeof s.transcript === 'string' && s.transcript.trim().length > 0) ||
-        (typeof s.transcript_snippet === 'string' && s.transcript_snippet.trim().length > 0);
-
-      const apiSessions: SessionItem[] = rawSessions
-        .filter((s: any) => !isCompleted(s))
-        .map((s: any) => ({
-          id: s.id,
-          title: s.title || s.company_name || 'Interview Session',
-          company_name: s.company_name || s.title || 'Company',
-          job_description: s.job_description || s.transcript_snippet || '',
-          role: s.role || '',
-          language: s.language || 'English',
-          resume_id: s.resume_id || null,
-          document_id: s.document_id || null,
-          status: s.status || 'not_started',
-          mode: s.mode || 'Interview',
-          duration_seconds: s.duration_seconds || 0,
-          save_transcript: s.save_transcript !== false,
-          created_at: s.created_at || new Date().toISOString(),
-        }));
-
-      setSessions(apiSessions);
-    } catch {
-      setLoadError('Could not sync sessions from Ghostove Backend. Check your connection and try again.');
-      if (!silent) setSessions([]);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [token]);
+    },
+    [token],
+  );
 
   // Initial load
   useEffect(() => {
@@ -166,18 +186,18 @@ export function SessionSelectScreen({
       }
     };
 
-    window.addEventListener('focus', handleFocusSync);
+    window.addEventListener("focus", handleFocusSync);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         handleFocusSync();
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // Tauri window focus listener
     let unlistenTauriFocus: (() => void) | undefined;
-    import('@tauri-apps/api/window')
+    import("@tauri-apps/api/window")
       .then(({ getCurrentWindow }) => {
         getCurrentWindow()
           .onFocusChanged(({ payload: focused }) => {
@@ -195,25 +215,28 @@ export function SessionSelectScreen({
 
     // Keyboard shortcut: Cmd+R / Ctrl+R / F5
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) || e.key === 'F5') {
+      if (
+        ((e.metaKey || e.ctrlKey) && (e.key === "r" || e.key === "R")) ||
+        e.key === "F5"
+      ) {
         e.preventDefault();
         loadSessions(false);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
 
     // Background polling heartbeat (every 10 seconds while tab/window is visible)
     const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible' && isMounted) {
+      if (document.visibilityState === "visible" && isMounted) {
         loadSessions(true);
       }
     }, 10000);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('focus', handleFocusSync);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("focus", handleFocusSync);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("keydown", handleKeyDown);
       if (unlistenTauriFocus) unlistenTauriFocus();
       clearInterval(pollInterval);
     };
@@ -221,7 +244,10 @@ export function SessionSelectScreen({
 
   // Pull-to-refresh event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop === 0) {
+    if (
+      scrollContainerRef.current &&
+      scrollContainerRef.current.scrollTop === 0
+    ) {
       touchStartY.current = e.touches[0].clientY;
       setIsPulling(true);
     }
@@ -247,7 +273,10 @@ export function SessionSelectScreen({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop === 0) {
+    if (
+      scrollContainerRef.current &&
+      scrollContainerRef.current.scrollTop === 0
+    ) {
       mouseStartY.current = e.clientY;
     }
   };
@@ -278,29 +307,37 @@ export function SessionSelectScreen({
       const activeToken = token || (await getStoredToken());
       const headers: Record<string, string> = {};
       if (activeToken) {
-        headers['Authorization'] = `Bearer ${activeToken}`;
+        headers["Authorization"] = `Bearer ${activeToken}`;
       }
-      const response = await deviceBoundFetch(`${BACKEND_API_URL}/api/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers,
-      });
+      const response = await deviceBoundFetch(
+        `${BACKEND_API_URL}/api/sessions/${sessionId}`,
+        {
+          method: "DELETE",
+          headers,
+        },
+      );
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(body?.detail || `Backend returned ${response.status}`);
       }
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (error) {
-      console.error('[SessionSelect] Could not delete session:', error);
-      setActionError(error instanceof Error ? error.message : 'Could not delete this session. Check your connection and try again.');
+      console.error("[SessionSelect] Could not delete session:", error);
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Could not delete this session. Check your connection and try again.",
+      );
     }
     setActiveMenuSessionId(null);
   };
 
-  const handleOpenDashboard = () => openBrowserUrl(`${WEB_API_URL}/dashboard/sessions`);
+  const handleOpenDashboard = () =>
+    openBrowserUrl(`${WEB_API_URL}/dashboard/sessions`);
   const handleCreateSession = () => setIsCreateModalOpen(true);
   const handleSessionAction = (session: SessionItem) => {
-    if (interviewTimeStatus === 'checking') return;
-    if (interviewTimeStatus === 'exhausted') {
+    if (interviewTimeStatus === "checking") return;
+    if (interviewTimeStatus === "exhausted") {
       onPurchaseTime();
       return;
     }
@@ -310,29 +347,35 @@ export function SessionSelectScreen({
   const formatDate = (isoStr: string) => {
     try {
       const d = new Date(isoStr);
-      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+      return d
+        .toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+        .toUpperCase();
     } catch {
-      return '2 OCT 2026';
+      return "2 OCT 2026";
     }
   };
 
   const filteredSessions = sessions.filter((s) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    const matchCompany = (s.company_name || '').toLowerCase().includes(q);
-    const matchTitle = (s.title || '').toLowerCase().includes(q);
-    const matchDesc = (s.job_description || '').toLowerCase().includes(q);
+    const matchCompany = (s.company_name || "").toLowerCase().includes(q);
+    const matchTitle = (s.title || "").toLowerCase().includes(q);
+    const matchDesc = (s.job_description || "").toLowerCase().includes(q);
     return matchCompany || matchTitle || matchDesc;
   });
 
   const sortedSessions = [...filteredSessions].sort((a, b) => {
     const timeA = new Date(a.created_at).getTime();
     const timeB = new Date(b.created_at).getTime();
-    return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
   });
 
   return (
-    <div className="p-3.5 flex flex-col h-[calc(100%-44px)] overflow-hidden space-y-3 select-none bg-slate-950 text-slate-100">
+    <div className="p-3.5 flex flex-col h-[calc(100%-44px)] overflow-hidden space-y-3  select-none bg-slate-950 text-slate-100">
       {/* 1. Search Bar & Action Controls Row */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
@@ -353,14 +396,16 @@ export function SessionSelectScreen({
           className="p-1.5 bg-slate-900/90 border border-slate-800/80 hover:border-slate-700/80 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 disabled:opacity-60"
           title="Check for updates (⌘R)"
         >
-          <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+          <RotateCw
+            className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-emerald-400" : ""}`}
+          />
         </button>
 
         {/* Sort Button */}
         <button
-          onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+          onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
           className="p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-          title={`Sort ${sortOrder === 'desc' ? 'oldest first' : 'newest first'}`}
+          title={`Sort ${sortOrder === "desc" ? "oldest first" : "newest first"}`}
         >
           <ArrowUpDown className="w-3.5 h-3.5" />
         </button>
@@ -375,7 +420,7 @@ export function SessionSelectScreen({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 relative"
+        className="relative flex-1 space-y-2.5 overflow-y-auto   bg-slate-900/20 p-2.5 pr-1.5"
       >
         {actionError && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
@@ -385,20 +430,24 @@ export function SessionSelectScreen({
         {/* Pull-down indicator */}
         {(pullDistance > 0 || (isRefreshing && !loading)) && (
           <div
-            style={{ height: isRefreshing ? '34px' : `${pullDistance}px` }}
+            style={{ height: isRefreshing ? "34px" : `${pullDistance}px` }}
             className="overflow-hidden transition-all duration-150 flex items-center justify-center shrink-0"
           >
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm">
               <RotateCw
-                className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`}
-                style={!isRefreshing ? { transform: `rotate(${pullDistance * 6}deg)` } : undefined}
+                className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`}
+                style={
+                  !isRefreshing
+                    ? { transform: `rotate(${pullDistance * 6}deg)` }
+                    : undefined
+                }
               />
               <span>
                 {isRefreshing
-                  ? 'Checking for updates...'
+                  ? "Checking for updates..."
                   : pullDistance >= 40
-                  ? 'Release to refresh'
-                  : 'Pull down to refresh'}
+                    ? "Release to refresh"
+                    : "Pull down to refresh"}
               </span>
             </div>
           </div>
@@ -410,11 +459,15 @@ export function SessionSelectScreen({
             <span>Loading dossiers...</span>
           </div>
         ) : sortedSessions.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-xs space-y-2 border border-dashed border-slate-800 rounded-2xl p-6 bg-slate-900/20">
+          <div className="space-y-2 border border-dashed border-slate-800 bg-slate-900/20 p-6 py-12 rounded-2xl text-center text-xs text-slate-400">
             {loadError ? (
               <>
-                <p className="text-amber-300 font-medium">Session sync needs attention.</p>
-                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">{loadError}</p>
+                <p className="text-amber-300 font-medium">
+                  Session sync needs attention.
+                </p>
+                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  {loadError}
+                </p>
                 <button
                   type="button"
                   onClick={() => loadSessions(false)}
@@ -426,9 +479,12 @@ export function SessionSelectScreen({
               </>
             ) : (
               <>
-                <p className="text-slate-300 font-medium">No pending interview dossiers found.</p>
+                <p className="text-slate-300 font-medium">
+                  No pending interview dossiers found.
+                </p>
                 <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                  Completed sessions can be reviewed with transcripts and AI notes on your Web Dashboard.
+                  Completed sessions can be reviewed with transcripts and AI
+                  notes on your Web Dashboard.
                 </p>
               </>
             )}
@@ -438,7 +494,7 @@ export function SessionSelectScreen({
             <div
               key={sess.id}
               onClick={() => handleSessionAction(sess)}
-              className="bg-slate-900/80 border border-slate-800/80 hover:border-emerald-500/40 rounded-2xl p-3.5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3 relative cursor-pointer group"
+              className="group relative flex cursor-pointer flex-col justify-between space-y-3 rounded-2xl border border-slate-800/80 bg-slate-900/80 p-3.5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md"
             >
               {/* Header: Date + 3-Dot Options */}
               <div className="flex items-center justify-between">
@@ -449,7 +505,9 @@ export function SessionSelectScreen({
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() =>
-                      setActiveMenuSessionId(activeMenuSessionId === sess.id ? null : sess.id)
+                      setActiveMenuSessionId(
+                        activeMenuSessionId === sess.id ? null : sess.id,
+                      )
                     }
                     className="p-1 text-slate-500 hover:text-white transition-colors rounded cursor-pointer"
                   >
@@ -464,20 +522,20 @@ export function SessionSelectScreen({
                           setActiveMenuSessionId(null);
                           handleSessionAction(sess);
                         }}
-                        disabled={interviewTimeStatus === 'checking'}
+                        disabled={interviewTimeStatus === "checking"}
                         className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center gap-2 cursor-pointer font-medium disabled:opacity-50 disabled:cursor-wait"
                       >
-                        {interviewTimeStatus === 'exhausted' ? (
+                        {interviewTimeStatus === "exhausted" ? (
                           <ExternalLink className="w-3 h-3 text-emerald-400" />
                         ) : (
                           <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
                         )}
                         <span>
-                          {interviewTimeStatus === 'checking'
-                            ? 'Checking time…'
-                            : interviewTimeStatus === 'exhausted'
-                              ? 'Purchase time'
-                              : 'Launch HUD'}
+                          {interviewTimeStatus === "checking"
+                            ? "Checking time…"
+                            : interviewTimeStatus === "exhausted"
+                              ? "Purchase time"
+                              : "Launch HUD"}
                         </span>
                       </button>
                       <button
@@ -496,7 +554,9 @@ export function SessionSelectScreen({
               <div className="space-y-2">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-slate-800 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 shadow-sm shadow-emerald-500/10">
-                    {sess.company_name ? sess.company_name.substring(0, 2).toUpperCase() : 'CO'}
+                    {sess.company_name
+                      ? sess.company_name.substring(0, 2).toUpperCase()
+                      : "CO"}
                   </div>
                   <div className="overflow-hidden min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -510,7 +570,7 @@ export function SessionSelectScreen({
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                      {sess.job_description || 'Interview preparation dossier'}
+                      {sess.job_description || "Interview preparation dossier"}
                     </p>
                   </div>
                 </div>
@@ -519,12 +579,14 @@ export function SessionSelectScreen({
                 <div className="flex items-center gap-1.5 pt-0.5">
                   <span
                     className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      (sess.mode || '').toLowerCase().includes('mock')
-                        ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
-                        : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      (sess.mode || "").toLowerCase().includes("mock")
+                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
                     }`}
                   >
-                    {(sess.mode || '').toLowerCase().includes('mock') ? 'Mock Practice' : 'Live Co-pilot'}
+                    {(sess.mode || "").toLowerCase().includes("mock")
+                      ? "Mock Practice"
+                      : "Live Co-pilot"}
                   </span>
 
                   {sess.resume_id && (
@@ -555,7 +617,7 @@ export function SessionSelectScreen({
                 <div className="text-[10px] text-slate-500 font-mono">
                   {sess.duration_seconds > 0
                     ? `${Math.floor(sess.duration_seconds / 60)}m used`
-                    : 'Ready to launch'}
+                    : "Ready to launch"}
                 </div>
 
                 <button
@@ -564,20 +626,20 @@ export function SessionSelectScreen({
                     e.stopPropagation();
                     handleSessionAction(sess);
                   }}
-                  disabled={interviewTimeStatus === 'checking'}
+                  disabled={interviewTimeStatus === "checking"}
                   className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-1 rounded-xl transition-all shadow-sm shadow-emerald-500/20 cursor-pointer flex items-center gap-1 group-hover:scale-105 disabled:opacity-60 disabled:cursor-wait disabled:hover:bg-emerald-500"
                 >
-                  {interviewTimeStatus === 'exhausted' ? (
+                  {interviewTimeStatus === "exhausted" ? (
                     <ExternalLink className="w-2.5 h-2.5" />
                   ) : (
                     <Play className="w-2.5 h-2.5 fill-slate-950" />
                   )}
                   <span>
-                    {interviewTimeStatus === 'checking'
-                      ? 'Checking time…'
-                      : interviewTimeStatus === 'exhausted'
-                        ? 'Purchase time'
-                        : 'Launch HUD'}
+                    {interviewTimeStatus === "checking"
+                      ? "Checking time…"
+                      : interviewTimeStatus === "exhausted"
+                        ? "Purchase time"
+                        : "Launch HUD"}
                   </span>
                 </button>
               </div>

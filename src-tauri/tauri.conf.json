@@ -15,7 +15,7 @@
         "title": "Ghostove Stealth HUD",
         "width": 440,
         "height": 600,
-        "resizable": true,
+        "resizable": false,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

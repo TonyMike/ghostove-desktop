@@ -172,11 +172,16 @@ function InterviewTopBarComponent({
       data-tauri-drag-region
       data-hud-hit-region
       onMouseDown={(e) => {
-        if (e.button === 0 && e.target === e.currentTarget) {
-          startDragging();
+        const target = e.target;
+        if (
+          e.button === 0 &&
+          target instanceof Element &&
+          !target.closest('button, a, input, textarea, select, [role="button"], [data-no-drag]')
+        ) {
+          void startDragging();
         }
       }}
-      className="bg-slate-950/90 border border-emerald-500/20 shadow-none rounded-full px-3 py-1.5 flex items-center justify-between gap-2.5 select-none backdrop-blur-2xl text-white max-w-full relative z-50"
+      className="bg-slate-950/90 border border-emerald-500/20 shadow-none rounded-full px-3 py-1.5 flex items-center justify-between gap-2.5 select-none cursor-move backdrop-blur-2xl text-white max-w-full relative z-50"
     >
       {/* Left: Audio Controls (Shared Audio & Microphone) & Action buttons */}
       <div className="flex items-center gap-1.5">

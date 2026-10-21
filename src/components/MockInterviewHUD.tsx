@@ -87,7 +87,7 @@ export function MockInterviewHUD({
 
   // Set window size for Mock Interview Practice
   useEffect(() => {
-    resizeWindow(1080, 740);
+    resizeWindow(960, 680);
     return () => {
       resizeWindow(440, 600);
     };
@@ -95,9 +95,9 @@ export function MockInterviewHUD({
 
   useEffect(() => {
     if (isCollapsed) {
-      resizeWindow(1080, 60);
+      resizeWindow(960, 60);
     } else {
-      resizeWindow(1080, 740);
+      resizeWindow(960, 680);
     }
   }, [isCollapsed]);
 
@@ -497,11 +497,16 @@ export function MockInterviewHUD({
       <div
         data-tauri-drag-region
         onMouseDown={(e) => {
-          if (e.button === 0 && e.target === e.currentTarget) {
-            startDragging();
+          const target = e.target;
+          if (
+            e.button === 0 &&
+            target instanceof Element &&
+            !target.closest('button, a, input, textarea, select, [role="button"], [data-no-drag]')
+          ) {
+            void startDragging();
           }
         }}
-        className="w-full max-w-[1040px] mb-3 bg-[#121316]/95 border border-purple-500/30 shadow-none rounded-full px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-xl shrink-0"
+        className="w-full max-w-[920px] mb-3 bg-[#121316]/95 border border-purple-500/30 shadow-none rounded-full px-4 py-2 flex items-center justify-between gap-3 backdrop-blur-xl shrink-0 cursor-move"
       >
         {/* Left: Mode Badge & Target Role */}
         <div className="flex items-center gap-2.5">
@@ -566,9 +571,9 @@ export function MockInterviewHUD({
 
       {/* 2. Main Practice Workspace (2-Column Layout) */}
       {!isCollapsed && (
-        <div className="w-full max-w-[1040px] flex items-start justify-center gap-4 flex-1">
+        <div className="w-full max-w-[920px] flex items-start justify-center gap-4 flex-1">
           {/* Left Column: Question Presentation & Candidate Speech Recording */}
-          <div className="flex-1 flex flex-col gap-3 min-w-0 max-w-[560px]">
+          <div className="flex-1 flex flex-col gap-3 min-w-0 max-w-[500px]">
             {/* Question Card */}
             <div className="bg-[#121316]/95 border border-white/15 rounded-2xl p-4 shadow-none backdrop-blur-xl space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-white/10 text-xs">
@@ -754,7 +759,7 @@ export function MockInterviewHUD({
           </div>
 
           {/* Right Column: AI STAR Scorecard & Ideal Answer Panel */}
-          <div className="w-[460px] shrink-0 flex flex-col gap-3 min-h-[480px]">
+          <div className="w-[400px] shrink-0 flex flex-col gap-3 min-h-[440px]">
             {/* Ideal Model Answer Card (if opened) */}
             {showIdealAnswer && idealAnswer && (
               <div className="bg-[#121316]/95 border border-purple-500/40 rounded-2xl p-4 shadow-none backdrop-blur-xl space-y-2 animate-fade-in">
@@ -801,7 +806,7 @@ export function MockInterviewHUD({
 
               {/* STAR Breakdown */}
               {evaluation ? (
-                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[460px] pr-1 scrollbar-thin scrollbar-thumb-white/15">
+                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[420px] pr-1 scrollbar-thin scrollbar-thumb-white/15">
                   {/* Situation & Task */}
                   {evaluation.star_breakdown.situation && (
                     <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-1">

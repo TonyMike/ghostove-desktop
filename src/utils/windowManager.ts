@@ -116,6 +116,24 @@ export async function resizeWindow(width: number, height: number): Promise<void>
   }
 }
 
+export async function setWindowResizable(resizable: boolean): Promise<void> {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setResizable(resizable);
+  } catch (err) {
+    console.warn('[WindowManager] setWindowResizable error:', err);
+  }
+}
+
+export async function setWindowShadow(enabled: boolean): Promise<void> {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setShadow(enabled);
+  } catch (err) {
+    console.warn('[WindowManager] setWindowShadow error:', err);
+  }
+}
+
 export async function openPrivacySettings(settingType: string = 'microphone'): Promise<void> {
   await safeInvoke('open_privacy_settings', { settingType });
 }

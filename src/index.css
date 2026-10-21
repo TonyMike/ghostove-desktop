@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+.apple-squircle {
+  border-radius: 16px;
+}
+
+.apple-squircle-lg {
+  border-radius: 24px;
+}
+
+@supports (corner-shape: squircle) {
+  .apple-squircle,
+  .apple-squircle-lg {
+    corner-shape: squircle;
+  }
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;

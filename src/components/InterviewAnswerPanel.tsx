@@ -38,12 +38,13 @@ const CODE_KEYWORDS = new Set(
   ),
 );
 
+const CODE_TOKEN_PATTERN = /\/\*[\s\S]*?\*\/|\/\/.*|#.*|--.*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b|[A-Za-z_$][\w$]*/g;
+
 function highlightCodeLine(line: string, language: string): React.ReactNode[] {
-  const tokens = /\/\*[\s\S]*?\*\/|\/\/.*|#.*|--.*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b|[A-Za-z_$][\w$]*/g;
   const parts: React.ReactNode[] = [];
   let cursor = 0;
 
-  for (const match of line.matchAll(tokens)) {
+  for (const match of line.matchAll(CODE_TOKEN_PATTERN)) {
     const token = match[0];
     const start = match.index ?? 0;
     if (start > cursor) parts.push(line.slice(cursor, start));
@@ -408,7 +409,7 @@ function CodeBlockCard({ code, language, codeSize }: { code: string; language: s
     <div
       data-hud-hit-region
       className={`bg-slate-950/90 border border-emerald-500/20 rounded-2xl shadow-none backdrop-blur-2xl p-4 flex flex-col justify-between text-white transition-all duration-200 ${
-        isExpanded ? 'h-[640px]' : 'min-h-[480px] max-h-[620px]'
+        isExpanded ? 'h-[580px]' : 'min-h-[420px] max-h-[560px]'
       }`}
     >
       {/* Top Mini Header / Controls */}

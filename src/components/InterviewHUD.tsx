@@ -97,9 +97,9 @@ export function InterviewHUD({
   const toggleCollapse =
     externalToggleCollapse || (() => setLocalCollapsed(!localCollapsed));
 
-  // Resize window to generous dimensions (1080 x 740) so the interview panel is large with zero horizontal scroll
+  // Keep the HUD compact while leaving enough room for both reading panels.
   useEffect(() => {
-    resizeWindow(1080, 740);
+    resizeWindow(960, 680);
     return () => {
       resizeWindow(440, 600);
     };
@@ -107,9 +107,9 @@ export function InterviewHUD({
 
   useEffect(() => {
     if (isCollapsed) {
-      resizeWindow(1080, 60);
+      resizeWindow(960, 60);
     } else {
-      resizeWindow(1080, 740);
+      resizeWindow(960, 680);
     }
   }, [isCollapsed]);
 
@@ -553,7 +553,7 @@ export function InterviewHUD({
         onCancel={cancelEndSession}
         onConfirm={confirmEndSession}
       />
-      <div className="w-full max-w-[1040px] mb-3 shrink-0 relative z-50" data-hud-hit-region>
+      <div className="w-full max-w-[920px] mb-3 shrink-0 relative z-50" data-hud-hit-region>
         <InterviewTopBar
           showAnswer={showAnswer}
           onToggleAnswer={handleToggleAnswer}
@@ -595,7 +595,7 @@ export function InterviewHUD({
         remainingSeconds > 0 &&
         remainingSeconds <= 300 && (
           <div
-            className={`w-full max-w-[1040px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
+            className={`w-full max-w-[920px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
               remainingSeconds <= 60
                 ? "border-rose-400/30 bg-rose-950/70 text-rose-100"
                 : "border-amber-400/30 bg-amber-950/60 text-amber-100"
@@ -627,7 +627,7 @@ export function InterviewHUD({
 
       {/* 2. Main Content Panels Container (Side-by-Side) */}
       {!isCollapsed && (
-        <div className="w-full max-w-[1040px] flex items-start justify-center gap-4 flex-1 overflow-x-hidden relative z-10">
+        <div className="w-full max-w-[920px] flex items-start justify-center gap-4 flex-1 overflow-x-hidden relative z-10">
           {/* Left Column: Chat input (if open) + Answer Panel (if open) */}
           <div className="flex-1 flex flex-col min-w-0 max-w-[680px]">
             {/* Chat Drawer for typing manually */}
@@ -657,7 +657,7 @@ export function InterviewHUD({
           </div>
 
           {/* Right Column: Transcript Panel */}
-          <div className="w-[360px] shrink-0">
+          <div className="w-[320px] shrink-0">
             <InterviewTranscriptPanel
               transcriptList={transcriptList}
               interimText={interimText}

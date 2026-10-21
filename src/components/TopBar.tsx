@@ -50,8 +50,13 @@ export function TopBar({
     <div
       data-tauri-drag-region
       onMouseDown={(e) => {
-        if (e.button === 0 && e.target === e.currentTarget) {
-          startDragging();
+        const target = e.target;
+        if (
+          e.button === 0 &&
+          target instanceof Element &&
+          !target.closest('button, a, input, textarea, select, [role="button"], [data-no-drag]')
+        ) {
+          void startDragging();
         }
       }}
       className="bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/90 px-3 py-2 flex items-center justify-between select-none cursor-move relative z-50 text-slate-200"
@@ -66,10 +71,6 @@ export function TopBar({
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-xs text-white tracking-tight">
             Ghostove
-          </span>
-          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            STEALTH
           </span>
         </div>
       </div>

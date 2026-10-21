@@ -13,6 +13,9 @@ import {
   enforceScreenShareProtection,
   moveToCursorScreen,
   resizeWindow,
+  setWindowResizable,
+  setWindowShadow,
+  usesNativeMacSystemAudio,
 } from './utils/windowManager';
 import { useDeepLink, DeepLinkPayload } from './hooks/useDeepLink';
 import { openBrowserUrl } from './utils/browser';
@@ -21,6 +24,18 @@ import { deviceBoundFetch } from './utils/deviceBoundFetch';
 import { MandatoryUpdater } from './components/MandatoryUpdater';
 import { AudioOnboardingScreen } from './components/AudioOnboardingScreen';
 import { isAudioOnboardingComplete } from './utils/onboarding';
+import { KeychainAccessNotice } from './components/KeychainAccessNotice';
+
+const KEYCHAIN_NOTICE_KEY = 'ghostove_keychain_access_notice_seen_v1';
+
+function hasSeenKeychainAccessNotice(): boolean {
+  if (!usesNativeMacSystemAudio()) return true;
+  try {
+    return localStorage.getItem(KEYCHAIN_NOTICE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
 type InterviewTimeStatus = InterviewTimeCheck | 'checking';
@@ -28,6 +43,7 @@ type InterviewTimeStatus = InterviewTimeCheck | 'checking';
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [keychainNoticeComplete, setKeychainNoticeComplete] = useState(hasSeenKeychainAccessNotice);
   const [view, setView] = useState<'audio-onboarding' | 'session-select' | 'connect-session' | 'plan-required' | 'active-session'>('session-select');
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
   const [sharedAudioStream, setSharedAudioStream] = useState<MediaStream | null>(null);
@@ -39,6 +55,10 @@ function AppContent() {
   const [hudMode, setHudMode] = useState<'live' | 'mock'>('live');
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const pairingTokenReceived = useRef(false);
+  const keychainNoticeCompleteRef = useRef(keychainNoticeComplete);
+  const pendingKeychainToken = useRef<string | null>(null);
+  const pendingDeepLink = useRef<DeepLinkPayload | null>(null);
+  keychainNoticeCompleteRef.current = keychainNoticeComplete;
 
   const triggerSessionRefresh = useCallback(() => {
     setSessionRefreshTrigger((prev) => prev + 1);
@@ -49,12 +69,17 @@ function AppContent() {
     let isMounted = true;
     async function applyScreenShareProtection() {
       const status = await enforceScreenShareProtection();
-      if (isMounted) console.info('[Ghostove Desktop] Screen-share protection:', status);
+      if (isMounted)
+        console.info("[Ghostove Desktop] Screen-share protection:", status);
     }
     void applyScreenShareProtection();
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (/Windows/i.test(navigator.userAgent)) void setWindowShadow(false);
   }, []);
 
   // Global hotkey: Cmd+Shift+S (or Ctrl+Shift+S) to instantly switch panel to cursor screen
@@ -121,6 +146,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    if (!keychainNoticeComplete) return;
+
     async function loadToken() {
       const stored = await getStoredToken();
       if (stored) {
@@ -139,10 +166,37 @@ function AppContent() {
       setLoading(false);
     }
     loadToken();
-  }, [verifyToken, checkUserAccess]);
+  }, [keychainNoticeComplete, verifyToken, checkUserAccess]);
+
+  const handleKeychainNoticeContinue = () => {
+    try {
+      localStorage.setItem(KEYCHAIN_NOTICE_KEY, 'true');
+    } catch {
+      // Continue this session even if the non-secret notice preference cannot be saved.
+    }
+    keychainNoticeCompleteRef.current = true;
+    setKeychainNoticeComplete(true);
+    setLoading(true);
+
+    const queuedLink = pendingDeepLink.current;
+    pendingDeepLink.current = null;
+    if (queuedLink) {
+      void handleDeepLink(queuedLink);
+      pendingKeychainToken.current = null;
+      return;
+    }
+
+    const queuedToken = pendingKeychainToken.current;
+    pendingKeychainToken.current = null;
+    if (queuedToken) void handleTokenReceived(queuedToken);
+  };
 
   const handleTokenReceived = useCallback(async (newToken: string) => {
     pairingTokenReceived.current = true;
+    if (!keychainNoticeCompleteRef.current) {
+      pendingKeychainToken.current = newToken;
+      return;
+    }
     await setStoredToken(newToken);
     setToken(newToken);
     setInterviewTimeStatus('checking');
@@ -160,6 +214,11 @@ function AppContent() {
   }, [checkUserAccess]);
 
   const handleDeepLink = useCallback(async (payload: DeepLinkPayload) => {
+    if (!keychainNoticeCompleteRef.current) {
+      pendingDeepLink.current = payload;
+      return;
+    }
+
     console.log('[Ghostove Desktop] Deep link received:', {
       action: payload.action,
       sessionId: payload.sessionId,
@@ -318,24 +377,35 @@ function AppContent() {
     setView('connect-session');
   };
 
-  // Give the first-run guide enough room for its setup steps and OS screenshot.
+  // Keep audio setup compact and fixed; restore normal resizing on other screens.
   useEffect(() => {
     if (view !== 'active-session') {
-      if (view === 'audio-onboarding') {
-        resizeWindow(1080, 740);
-      } else if (isCollapsed) {
-        resizeWindow(440, 48);
-      } else {
-        resizeWindow(440, 600);
-      }
+      void (async () => {
+        await setWindowResizable(view !== 'audio-onboarding');
+        if (view === 'audio-onboarding') await resizeWindow(880, 600);
+        else if (isCollapsed) await resizeWindow(440, 48);
+        else await resizeWindow(440, 600);
+      })();
     }
   }, [view, isCollapsed]);
+
+  if (!keychainNoticeComplete) {
+    return <KeychainAccessNotice onContinue={handleKeychainNoticeContinue} />;
+  }
 
   if (loading) {
     return (
       <>
-        <div className="w-full h-full bg-[#f4f4f0] dark:bg-slate-950 text-slate-500 flex items-center justify-center text-xs select-none">
-          Initializing Ghostove Stealth Engine...
+        <div
+          className="flex h-full w-full items-center justify-center select-none bg-[#f4f4f0] dark:bg-slate-950"
+          role="status"
+          aria-label="Loading Ghostove"
+        >
+          <img
+            src="/ghostove-icon.svg"
+            alt=""
+            className="h-14 w-14 animate-pulse motion-reduce:animate-none"
+          />
         </div>
         <MandatoryUpdater deferWhileSessionActive={view === 'active-session'} />
       </>
@@ -363,27 +433,31 @@ function AppContent() {
   if (view === 'active-session') {
     return (
       <>
-        <div className="w-full h-full relative overflow-x-hidden">
-          {hudMode === 'mock' ? (
+        <div className="w-full h-full relative  overflow-x-hidden">
+          {hudMode === "mock" ? (
             <MockInterviewHUD
               token={token}
               sessionId={selectedSession?.id}
-              language={selectedSession?.language || 'English'}
-              jobTitle={selectedSession?.title || selectedSession?.company_name || 'Senior Software Engineer'}
+              language={selectedSession?.language || "English"}
+              jobTitle={
+                selectedSession?.title ||
+                selectedSession?.company_name ||
+                "Senior Software Engineer"
+              }
               onBackToMenu={() => {
                 setSharedAudioStream(null);
                 setStartSharedAudioOnConnect(false);
                 triggerSessionRefresh();
-                setView('session-select');
+                setView("session-select");
               }}
-              onSwitchToLive={() => setHudMode('live')}
+              onSwitchToLive={() => setHudMode("live")}
               onLogout={handleLogout}
             />
           ) : (
             <InterviewHUD
               token={token}
               sessionId={selectedSession?.id}
-              language={selectedSession?.language || 'English'}
+              language={selectedSession?.language || "English"}
               initialSharedStream={sharedAudioStream}
               startSharedAudioOnConnect={startSharedAudioOnConnect}
               onLogout={handleLogout}
@@ -391,7 +465,7 @@ function AppContent() {
                 setSharedAudioStream(null);
                 setStartSharedAudioOnConnect(false);
                 triggerSessionRefresh();
-                setView('session-select');
+                setView("session-select");
               }}
               onOpenScreenPosition={() => setShowScreenPosition(true)}
               onGetMoreTimeOrPlan={handleGetMoreTimeOrPlan}
@@ -400,7 +474,10 @@ function AppContent() {
             />
           )}
           {showScreenPosition && (
-            <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center" data-hud-hit-region>
+            <div
+              className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center"
+              data-hud-hit-region
+            >
               <div className="relative w-[440px] h-[600px] bg-[#f4f4f0] dark:bg-slate-900 overflow-hidden">
                 <ScreenPositionPopover
                   isOpen={showScreenPosition}
@@ -427,90 +504,96 @@ function AppContent() {
   // Screen 3 & 4: Session List View or Connect Call Session View (Main setup panel)
   return (
     <>
-    <div className="w-full h-full relative select-none bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
-      {/* TopBar */}
-      <TopBar
-        isCollapsed={isCollapsed}
-        onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-        onOpenScreenPosition={() => {
-          setIsCollapsed(false);
-          setShowScreenPosition(true);
-        }}
-        onLogout={handleLogout}
-      />
-
-      {/* View Switcher: Plan Required, Connect Session, or Session Select */}
-      {!isCollapsed && view === 'plan-required' && (
-        <PlanRequiredScreen
-          session={selectedSession}
-          reason={timeCheckIssue}
-          onBack={() => {
-            triggerSessionRefresh();
-            setView('session-select');
+      <div className="w-full h-full relative select-none apple-squircle bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
+        {/* TopBar */}
+        <TopBar
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+          onOpenScreenPosition={() => {
+            setIsCollapsed(false);
+            setShowScreenPosition(true);
           }}
-          onRefreshCredits={async () => {
-            const result = await checkUserAccess(token);
-            if (result !== 'available') setTimeCheckIssue(result);
-            return result;
-          }}
-          onContinueSession={() => setView('connect-session')}
+          onLogout={handleLogout}
         />
-      )}
 
-      {!isCollapsed && view === 'connect-session' && (
-        <ConnectSessionScreen
-          session={selectedSession}
-          hasAccess={interviewTimeStatus === 'available'}
-          onUpgradeRequired={() => setView('plan-required')}
-          onCheckTime={async () => {
-            const result = await checkUserAccess(token);
-            if (result !== 'available') {
-              setTimeCheckIssue(result);
-              setView('plan-required');
-              return false;
-            }
-            return true;
-          }}
-          onConnect={async (stream, startNativeSystemAudio) => {
-            const timeCheck = await checkUserAccess(token);
-            if (timeCheck !== 'available') {
-              stream?.getTracks().forEach((track) => track.stop());
-              setTimeCheckIssue(timeCheck);
-              setView('plan-required');
-              return;
-            }
-            console.log('[Ghostove Desktop] Connecting call session with stream:', stream);
-            const protection = await enforceScreenShareProtection();
-            console.info('[Ghostove Desktop] Screen-share protection:', protection);
-            setSharedAudioStream(stream || null);
-            setStartSharedAudioOnConnect(startNativeSystemAudio === true);
-            setView('active-session');
-          }}
-          onBack={() => {
-            triggerSessionRefresh();
-            setView('session-select');
-          }}
+        {/* View Switcher: Plan Required, Connect Session, or Session Select */}
+        {!isCollapsed && view === "plan-required" && (
+          <PlanRequiredScreen
+            session={selectedSession}
+            reason={timeCheckIssue}
+            onBack={() => {
+              triggerSessionRefresh();
+              setView("session-select");
+            }}
+            onRefreshCredits={async () => {
+              const result = await checkUserAccess(token);
+              if (result !== "available") setTimeCheckIssue(result);
+              return result;
+            }}
+            onContinueSession={() => setView("connect-session")}
+          />
+        )}
+
+        {!isCollapsed && view === "connect-session" && (
+          <ConnectSessionScreen
+            session={selectedSession}
+            hasAccess={interviewTimeStatus === "available"}
+            onUpgradeRequired={() => setView("plan-required")}
+            onCheckTime={async () => {
+              const result = await checkUserAccess(token);
+              if (result !== "available") {
+                setTimeCheckIssue(result);
+                setView("plan-required");
+                return false;
+              }
+              return true;
+            }}
+            onConnect={async (stream, startNativeSystemAudio) => {
+              const timeCheck = await checkUserAccess(token);
+              if (timeCheck !== "available") {
+                stream?.getTracks().forEach((track) => track.stop());
+                setTimeCheckIssue(timeCheck);
+                setView("plan-required");
+                return;
+              }
+              console.log(
+                "[Ghostove Desktop] Connecting call session with stream:",
+                stream,
+              );
+              const protection = await enforceScreenShareProtection();
+              console.info(
+                "[Ghostove Desktop] Screen-share protection:",
+                protection,
+              );
+              setSharedAudioStream(stream || null);
+              setStartSharedAudioOnConnect(startNativeSystemAudio === true);
+              setView("active-session");
+            }}
+            onBack={() => {
+              triggerSessionRefresh();
+              setView("session-select");
+            }}
+          />
+        )}
+
+        {!isCollapsed && view === "session-select" && (
+          <SessionSelectScreen
+            token={token}
+            refreshTrigger={sessionRefreshTrigger}
+            interviewTimeStatus={interviewTimeStatus}
+            onPurchaseTime={handleGetMoreTimeOrPlan}
+            onRefreshTime={handleRefreshInterviewTime}
+            onStartSession={handleSelectSession}
+          />
+        )}
+
+        {/* Screen & Position Popover Modal */}
+        <ScreenPositionPopover
+          isOpen={showScreenPosition}
+          onClose={() => setShowScreenPosition(false)}
         />
-      )}
-
-      {!isCollapsed && view === 'session-select' && (
-        <SessionSelectScreen
-          token={token}
-          refreshTrigger={sessionRefreshTrigger}
-          interviewTimeStatus={interviewTimeStatus}
-          onPurchaseTime={handleGetMoreTimeOrPlan}
-          onRefreshTime={handleRefreshInterviewTime}
-          onStartSession={handleSelectSession}
-        />
-      )}
-
-      {/* Screen & Position Popover Modal */}
-      <ScreenPositionPopover
-        isOpen={showScreenPosition}
-        onClose={() => setShowScreenPosition(false)}
-      />
-    </div>
-    <MandatoryUpdater deferWhileSessionActive={false} />
+      </div>
+      <MandatoryUpdater deferWhileSessionActive={false} />
     </>
   );
 }
