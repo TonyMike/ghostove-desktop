@@ -210,18 +210,6 @@ async fn stop_system_audio_capture() -> Result<(), String> {
 // OS-Specific Screen-Share Invisibility & Virtual Desktop Behaviors
 // -------------------------------------------------------------------
 
-// Temporarily disabled. Set this to true to re-enable OS-level capture exclusion.
-const SCREEN_SHARE_INVISIBILITY_ENABLED: bool = false;
-
-fn screen_share_protection_disabled() -> ScreenShareProtectionStatus {
-    ScreenShareProtectionStatus {
-        platform: std::env::consts::OS.into(),
-        status: "disabled".into(),
-        method: "none".into(),
-        message: "Screen-share invisibility is temporarily disabled.".into(),
-    }
-}
-
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct ScreenShareProtectionStatus {
     pub platform: String,
@@ -232,10 +220,6 @@ pub struct ScreenShareProtectionStatus {
 
 #[cfg(target_os = "windows")]
 fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtectionStatus {
-    if !SCREEN_SHARE_INVISIBILITY_ENABLED {
-        return screen_share_protection_disabled();
-    }
-
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetWindowDisplayAffinity, SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
     };
@@ -282,10 +266,6 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtect
 
 #[cfg(target_os = "macos")]
 fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtectionStatus {
-    if !SCREEN_SHARE_INVISIBILITY_ENABLED {
-        return screen_share_protection_disabled();
-    }
-
     use macos_types::*;
     use macos_panel::*;
 
@@ -354,10 +334,6 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtect
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn apply_screen_share_invisibility(_window: &WebviewWindow) -> ScreenShareProtectionStatus {
-    if !SCREEN_SHARE_INVISIBILITY_ENABLED {
-        return screen_share_protection_disabled();
-    }
-
     println!("[Ghostove Linux] Screen share exclusion stub.");
     ScreenShareProtectionStatus {
         platform: std::env::consts::OS.into(),

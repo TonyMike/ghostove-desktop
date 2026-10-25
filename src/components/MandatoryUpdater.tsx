@@ -1,13 +1,53 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { WEB_API_URL } from '../utils/config';
 
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 interface MandatoryUpdaterProps {
   deferWhileSessionActive: boolean;
+}
+
+interface DesktopUpdatePolicy {
+  updatesPaused: boolean;
+  minimumSupportedVersion: string;
+}
+
+function versionParts(value: string): { numbers: number[]; prerelease: boolean } | null {
+  const match = value.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+  return match ? { numbers: match.slice(1, 4).map(Number), prerelease: Boolean(match[4]) } : null;
+}
+
+function isBelowMinimumVersion(current: string, minimum: string): boolean {
+  const currentParts = versionParts(current);
+  const minimumParts = versionParts(minimum);
+  if (!currentParts || !minimumParts) return true;
+  for (let index = 0; index < 3; index += 1) {
+    if (currentParts.numbers[index] !== minimumParts.numbers[index]) {
+      return currentParts.numbers[index] < minimumParts.numbers[index];
+    }
+  }
+  return currentParts.prerelease && !minimumParts.prerelease;
+}
+
+async function fetchDesktopUpdatePolicy(): Promise<DesktopUpdatePolicy | null> {
+  try {
+    const response = await fetch(`${WEB_API_URL.replace(/\/$/, '')}/api/desktop/update-policy`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const policy = await response.json();
+    if (typeof policy.updatesPaused !== 'boolean' || typeof policy.minimumSupportedVersion !== 'string') return null;
+    return policy as DesktopUpdatePolicy;
+  } catch {
+    // If the policy service is unavailable, continue checking the signed updater feed.
+    return null;
+  }
 }
 
 export function MandatoryUpdater({ deferWhileSessionActive }: MandatoryUpdaterProps) {
@@ -22,10 +62,28 @@ export function MandatoryUpdater({ deferWhileSessionActive }: MandatoryUpdaterPr
   const [error, setError] = useState<string | null>(null);
 
   const checkForUpdate = useCallback(async () => {
-    if (import.meta.env.DEV || !isTauri() || checkInProgressRef.current || updateRef.current) return;
+    if (import.meta.env.DEV || !isTauri() || checkInProgressRef.current) return;
 
     checkInProgressRef.current = true;
     try {
+      const [policy, currentVersion] = await Promise.all([
+        fetchDesktopUpdatePolicy(),
+        getVersion().catch(() => ''),
+      ]);
+      const currentMeetsMinimum = policy
+        ? !isBelowMinimumVersion(currentVersion, policy.minimumSupportedVersion)
+        : false;
+
+      if (policy?.updatesPaused && currentMeetsMinimum) {
+        updateRef.current = null;
+        setUpdateVersion(null);
+        setReleaseNotes('');
+        setError(null);
+        return;
+      }
+
+      if (updateRef.current) return;
+
       const update = await check();
       if (update) {
         updateRef.current = update;
