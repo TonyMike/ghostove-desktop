@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
 import { getDeviceIdentity, signDeviceChallenge } from '../utils/device';
+import { notifyAuthenticationFailure } from '../utils/authEvents';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'transcribing' | 'generating' | 'quota_exhausted';
 
@@ -113,6 +114,7 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (response.status === 401) notifyAuthenticationFailure();
         const challengeData = await response.json().catch(() => ({}));
         if (!response.ok || !challengeData.challengeId || !challengeData.challenge) {
           throw new Error(challengeData.detail || 'Could not verify this desktop device. Pair it again from Ghostove Web.');
@@ -193,6 +195,11 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
           setStreamingToken('');
         } else if (
           msgType === 'error' &&
+          ['device_not_paired', 'device_session_revoked', 'desktop_session_invalid'].includes(data.code)
+        ) {
+          notifyAuthenticationFailure();
+        } else if (
+          msgType === 'error' &&
           ['llm_provider_unavailable', 'answer_generation_failed'].includes(data.code)
         ) {
           setStatus('connected');
@@ -210,6 +217,7 @@ export function useWebSocketStream({ token, wsUrl = WS_URL }: UseWebSocketStream
 
     socket.onclose = (event) => {
       console.log(`[WS Stream] WebSocket closed code: ${event.code}`);
+      if (event.code === 4001 || event.code === 4401) notifyAuthenticationFailure();
       setStatus('disconnected');
     };
     }

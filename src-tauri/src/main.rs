@@ -221,7 +221,7 @@ pub struct ScreenShareProtectionStatus {
 #[cfg(target_os = "windows")]
 fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtectionStatus {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowDisplayAffinity, SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+        GetWindowDisplayAffinity, SetWindowDisplayAffinity,
     };
 
     let hwnd = match window.hwnd() {
@@ -236,30 +236,31 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtect
         }
     };
 
-    let applied = unsafe { SetWindowDisplayAffinity(hwnd.0 as _, WDA_EXCLUDEFROMCAPTURE) };
+    // Clear any capture-exclusion flag so screen recordings include Ghostove.
+    let applied = unsafe { SetWindowDisplayAffinity(hwnd.0 as _, 0) };
     if applied == 0 {
         return ScreenShareProtectionStatus {
             platform: "windows".into(),
             status: "failed".into(),
-            method: "SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)".into(),
-            message: "Windows could not apply capture exclusion to the Ghostove window.".into(),
+            method: "SetWindowDisplayAffinity(WDA_NONE)".into(),
+            message: "Windows could not enable screen capture of the Ghostove window.".into(),
         };
     }
 
     let mut current_affinity = 0;
     let verified = unsafe {
         GetWindowDisplayAffinity(hwnd.0 as _, &mut current_affinity) != 0
-            && current_affinity == WDA_EXCLUDEFROMCAPTURE
+            && current_affinity == 0
     };
 
     ScreenShareProtectionStatus {
         platform: "windows".into(),
-        status: if verified { "applied" } else { "unverified" }.into(),
-        method: "SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)".into(),
+        status: if verified { "disabled" } else { "unverified" }.into(),
+        method: "SetWindowDisplayAffinity(WDA_NONE)".into(),
         message: if verified {
-            "Windows reports the capture-exclusion flag is set. Effective exclusion requires Windows 10 version 2004 or newer and supported OS capture paths; other sharing methods may still capture this window.".into()
+            "Screen-share stealth is off. Ghostove is available to screen capture.".into()
         } else {
-            "Windows accepted the capture-exclusion request, but Ghostove could not verify the active setting.".into()
+            "Windows accepted the screen-capture visibility request, but Ghostove could not verify the active setting.".into()
         },
     }
 }
@@ -295,9 +296,8 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtect
         let current_mask: usize = msg_send![ns_window, styleMask];
         let _: () = msg_send![ns_window, setStyleMask: current_mask | NS_WINDOW_STYLE_MASK_NONACTIVATING_PANEL];
 
-        // 4. Best-effort sharing exclusion request. Apple marks this setting as legacy;
-        // it is not reliable evidence that modern screen-sharing clients omit the window.
-        let _: () = msg_send![ns_window, setSharingType: 0usize];
+        // 4. Keep the window readable by screen recording and sharing clients.
+        let _: () = msg_send![ns_window, setSharingType: 1usize];
 
         // 5. Ensure the panel never hides when deactivated
         let _: () = msg_send![ns_window, setHidesOnDeactivate: 0i8];
@@ -325,9 +325,9 @@ fn apply_screen_share_invisibility(window: &WebviewWindow) -> ScreenShareProtect
     println!("[Ghostove macOS] Converted to NSPanel, NonactivatingPanel, CanJoinAllSpaces, FullScreenAuxiliary, Level 1000, and orderFrontRegardless");
     ScreenShareProtectionStatus {
         platform: "macos".into(),
-        status: "unverified".into(),
-        method: "NSWindow sharing exclusion request".into(),
-        message: "Ghostove requested the legacy macOS sharing exclusion. Modern screen-sharing behavior is not guaranteed.".into(),
+        status: "disabled".into(),
+        method: "NSWindowSharingReadOnly".into(),
+        message: "Screen-share stealth is off. Ghostove is available to screen capture.".into(),
     }
 }
 
@@ -1325,7 +1325,7 @@ fn main() {
             }
 
             #[cfg(target_os = "macos")]
-            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
 
             if let Some(window) = app.get_webview_window("main") {
                 let screen_state = app.state::<ScreenStateManager>();

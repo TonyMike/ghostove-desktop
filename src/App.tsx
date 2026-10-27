@@ -25,6 +25,7 @@ import { MandatoryUpdater } from './components/MandatoryUpdater';
 import { AudioOnboardingScreen } from './components/AudioOnboardingScreen';
 import { isAudioOnboardingComplete } from './utils/onboarding';
 import { KeychainAccessNotice } from './components/KeychainAccessNotice';
+import { AUTHENTICATION_FAILURE_EVENT, AuthenticationError } from './utils/authEvents';
 
 const KEYCHAIN_NOTICE_KEY = 'ghostove_keychain_access_notice_seen_v1';
 
@@ -37,8 +38,8 @@ function hasSeenKeychainAccessNotice(): boolean {
   }
 }
 
-type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable';
-type InterviewTimeStatus = InterviewTimeCheck | 'checking';
+type InterviewTimeCheck = 'available' | 'exhausted' | 'unavailable' | 'unauthorized';
+type InterviewTimeStatus = Exclude<InterviewTimeCheck, 'unauthorized'> | 'checking';
 
 function AppContent() {
   const [token, setToken] = useState<string | null>(null);
@@ -72,11 +73,38 @@ function AppContent() {
   const pairingTokenReceived = useRef(false);
   const keychainNoticeCompleteRef = useRef(keychainNoticeComplete);
   const pendingKeychainToken = useRef<string | null>(null);
+  const authFailureHandled = useRef(false);
   const pendingDeepLink = useRef<DeepLinkPayload | null>(null);
   keychainNoticeCompleteRef.current = keychainNoticeComplete;
 
   const triggerSessionRefresh = useCallback(() => {
     setSessionRefreshTrigger((prev) => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    const handleAuthenticationFailure = () => {
+      if (authFailureHandled.current) return;
+      authFailureHandled.current = true;
+      pairingTokenReceived.current = false;
+      void clearStoredToken().catch((error) => {
+        console.error('[Ghostove Desktop] Could not clear the expired sign-in token:', error);
+      }).finally(() => {
+        setToken(null);
+        setSelectedSession(null);
+        setSharedAudioStream((stream) => {
+          stream?.getTracks().forEach((track) => track.stop());
+          return null;
+        });
+        setStartSharedAudioOnConnect(false);
+        setInterviewTimeStatus('unavailable');
+        setIsCollapsed(false);
+        setView('session-select');
+        setLoading(false);
+      });
+    };
+
+    window.addEventListener(AUTHENTICATION_FAILURE_EVENT, handleAuthenticationFailure);
+    return () => window.removeEventListener(AUTHENTICATION_FAILURE_EVENT, handleAuthenticationFailure);
   }, []);
 
   // Request and report best-effort OS screen-share protection on launch.
@@ -130,6 +158,7 @@ function AppContent() {
         );
         if (!response.ok) {
           setInterviewTimeStatus("unavailable");
+          if (response.status === 401) return "unauthorized";
           return "unavailable";
         }
 
@@ -150,6 +179,7 @@ function AppContent() {
         setInterviewTimeStatus(result);
         return result;
       } catch (err) {
+        if (err instanceof AuthenticationError) return "unauthorized";
         console.warn(
           "[Ghostove Desktop] Could not verify remaining interview time:",
           err,
@@ -172,6 +202,7 @@ function AppContent() {
           return data.valid === true;
         }
       } catch (e) {
+        if (e instanceof AuthenticationError) return false;
         console.warn(
           "[Ghostove Desktop] Token verification network check offline, trusting local token.",
         );
@@ -231,6 +262,7 @@ function AppContent() {
   const handleTokenReceived = useCallback(
     async (newToken: string) => {
       pairingTokenReceived.current = true;
+      authFailureHandled.current = false;
       if (!keychainNoticeCompleteRef.current) {
         pendingKeychainToken.current = newToken;
         return;
@@ -335,6 +367,7 @@ function AppContent() {
           setView("session-select");
           return;
         }
+        if (timeCheck === "unauthorized") return;
         if (timeCheck === "unavailable") {
           setTimeCheckIssue(timeCheck);
           setView("plan-required");
@@ -432,6 +465,7 @@ function AppContent() {
     setSelectedSession(currentSession);
 
     const timeCheck = await checkUserAccess(token);
+    if (timeCheck === "unauthorized") return;
     if (timeCheck === "exhausted") {
       // Keep the user on the session list, where the launch action becomes Purchase time.
       return;
@@ -482,7 +516,7 @@ function AppContent() {
   if (!token) {
     return (
       <>
-        <div className="w-full h-full select-none relative bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
+        <div className="apple-squircle w-full h-full select-none relative bg-[#f4f4f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-hidden">
           <AuthScreen
             onOpenScreenPosition={() => setShowScreenPosition(true)}
           />
@@ -596,6 +630,7 @@ function AppContent() {
             }}
             onRefreshCredits={async () => {
               const result = await checkUserAccess(token);
+              if (result === "unauthorized") return "unavailable";
               if (result !== "available") setTimeCheckIssue(result);
               return result;
             }}
@@ -610,6 +645,7 @@ function AppContent() {
             onUpgradeRequired={() => setView("plan-required")}
             onCheckTime={async () => {
               const result = await checkUserAccess(token);
+              if (result === "unauthorized") return false;
               if (result !== "available") {
                 setTimeCheckIssue(result);
                 setView("plan-required");
@@ -619,6 +655,10 @@ function AppContent() {
             }}
             onConnect={async (stream, startNativeSystemAudio) => {
               const timeCheck = await checkUserAccess(token);
+              if (timeCheck === "unauthorized") {
+                stream?.getTracks().forEach((track) => track.stop());
+                return;
+              }
               if (timeCheck !== "available") {
                 stream?.getTracks().forEach((track) => track.stop());
                 setTimeCheckIssue(timeCheck);

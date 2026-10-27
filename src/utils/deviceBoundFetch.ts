@@ -1,6 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { BACKEND_API_URL } from './config';
 import { signDeviceChallenge } from './device';
+import { AuthenticationError, notifyAuthenticationFailure } from './authEvents';
 
 const CHALLENGE_ID_HEADER = 'X-Ghostove-Device-Challenge';
 const DEVICE_PROOF_HEADER = 'X-Ghostove-Device-Proof';
@@ -50,6 +51,12 @@ export async function deviceBoundFetch(input: RequestInfo | URL, init?: RequestI
   });
   const challengeData = await response.json().catch(() => ({}));
   if (!response.ok || !challengeData.challengeId || !challengeData.challenge) {
+    if (response.status === 401) notifyAuthenticationFailure();
+    if (response.status === 401) {
+      throw new AuthenticationError(
+        challengeData.detail || 'Your Ghostove session expired. Pair this computer again from Ghostove Web.',
+      );
+    }
     throw new Error(challengeData.detail || 'Could not verify this desktop request. Pair this computer again from Ghostove Web.');
   }
 
@@ -58,7 +65,7 @@ export async function deviceBoundFetch(input: RequestInfo | URL, init?: RequestI
   headers.set(CHALLENGE_ID_HEADER, challengeData.challengeId);
   headers.set(DEVICE_PROOF_HEADER, signature);
   const method = request.method.toUpperCase();
-  return fetch(new Request(requestUrl.toString(), {
+  const result = await fetch(new Request(requestUrl.toString(), {
     method,
     headers,
     body: method === 'GET' || method === 'HEAD' ? undefined : bodyBytes,
@@ -72,4 +79,6 @@ export async function deviceBoundFetch(input: RequestInfo | URL, init?: RequestI
     keepalive: request.keepalive,
     signal: request.signal,
   }));
+  if (result.status === 401) notifyAuthenticationFailure();
+  return result;
 }

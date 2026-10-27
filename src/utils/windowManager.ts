@@ -189,7 +189,7 @@ export interface SystemPermissions {
 
 export interface ScreenShareProtectionStatus {
   platform: string;
-  status: 'applied' | 'unverified' | 'unsupported' | 'failed';
+  status: 'applied' | 'disabled' | 'unverified' | 'unsupported' | 'failed';
   method: string;
   message: string;
 }

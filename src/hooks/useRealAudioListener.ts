@@ -10,6 +10,7 @@ import {
 import { BACKEND_API_URL, WS_URL } from '../utils/config';
 import { getDeviceIdentity, signDeviceChallenge } from '../utils/device';
 import { deviceBoundFetch } from '../utils/deviceBoundFetch';
+import { notifyAuthenticationFailure } from '../utils/authEvents';
 
 export interface TranscriptItem {
   id: string;
@@ -904,6 +905,7 @@ export function useRealAudioListener({
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
           });
+          if (challengeResponse.status === 401) notifyAuthenticationFailure();
           const challengeData = await challengeResponse.json().catch(() => ({}));
           if (!challengeResponse.ok || !challengeData.challengeId || !challengeData.challenge) {
             throw new Error(challengeData.detail || 'Could not verify this desktop device. Pair it again from Ghostove Web.');
@@ -1124,6 +1126,7 @@ export function useRealAudioListener({
               console.error('[RealAudio WS] Device limit exceeded');
               setFullAnswer('🚫 ' + (data.message || 'Device limit exceeded (max 3 devices). Revoke an unused device in your web dashboard.'));
             } else if (data.type === 'error' && ['device_not_paired', 'device_session_revoked', 'desktop_session_invalid'].includes(data.code)) {
+              notifyAuthenticationFailure();
               console.warn('[RealAudio WS] Desktop pairing is no longer valid.');
               setFullAnswer('🔒 ' + (data.message || 'This desktop was signed out. Sign out of the desktop app, then pair it again from Ghostove Web.'));
             }
@@ -1132,6 +1135,7 @@ export function useRealAudioListener({
 
         ws.onclose = (event: CloseEvent) => {
           if (wsRef.current !== ws) return;
+          if (event.code === 4001 || event.code === 4401) notifyAuthenticationFailure();
           if (!isUnmounted) {
             setIsBackendConnected(false);
             console.log(`[RealAudio WS] Disconnected (code: ${event.code}).`);
