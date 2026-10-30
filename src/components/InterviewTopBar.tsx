@@ -1,12 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Move,
-  MousePointer,
   Maximize2,
   Minimize2,
-  Camera,
-  MessageSquare,
-  Sparkles,
   Eye,
   EyeOff,
   Sliders,
@@ -53,7 +49,6 @@ interface InterviewTopBarProps {
   onToggleCollapse: () => void;
   onOpenScreenPosition?: () => void;
   onToggleClickThrough?: (control?: HTMLElement) => void;
-  isClickThrough?: boolean;
   opacity: number;
   onOpacityChange: (val: number) => void;
   onLogout?: () => void;
@@ -64,6 +59,7 @@ interface InterviewTopBarProps {
   onFontSizeChange?: (f: number) => void;
   selectedLanguage?: string;
   autoAnswer?: boolean;
+  autoAnswerLocked?: boolean;
   onAutoAnswerChange?: (val: boolean) => void;
   onEdit?: () => void;
 }
@@ -127,7 +123,6 @@ function InterviewTopBarComponent({
   onToggleCollapse,
   onOpenScreenPosition,
   onToggleClickThrough,
-  isClickThrough = false,
   opacity,
   onOpacityChange,
   onLogout,
@@ -138,6 +133,7 @@ function InterviewTopBarComponent({
   onFontSizeChange,
   selectedLanguage = "English",
   autoAnswer = true,
+  autoAnswerLocked = false,
   onAutoAnswerChange,
   onEdit,
 }: InterviewTopBarProps) {
@@ -273,7 +269,6 @@ function InterviewTopBarComponent({
                 : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Answer</span>
             <span className="text-[10px] font-mono text-slate-300 bg-white/10 px-1 py-0.5 rounded ml-0.5">
               ⌘↵
@@ -291,7 +286,6 @@ function InterviewTopBarComponent({
             onClick={onScreenshot}
             className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
           >
-            <Camera className="w-3.5 h-3.5 text-purple-400" />
             <span>Screenshot</span>
             <span className="text-[10px] font-mono text-slate-300 bg-white/10 px-1 py-0.5 rounded ml-0.5">
               ⌘⇧S
@@ -313,7 +307,6 @@ function InterviewTopBarComponent({
                 : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
-            <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
             <span>Chat</span>
             <span className="text-[10px] font-mono text-slate-300 bg-white/10 px-1 py-0.5 rounded ml-0.5">
               ⌘K
@@ -339,36 +332,6 @@ function InterviewTopBarComponent({
           >
             <Move className="w-3.5 h-3.5" />
           </div>
-        </Tooltip>
-
-        {/* Keep this control interactive while the rest of the HUD clicks through. */}
-        <Tooltip
-          content={
-            isClickThrough
-              ? "Turn click-through off"
-              : "Let clicks pass through the HUD"
-          }
-          position="bottom"
-        >
-          <button
-            type="button"
-            data-click-through-toggle
-            aria-label={
-              isClickThrough
-                ? "Turn click-through off"
-                : "Turn click-through on"
-            }
-            aria-pressed={isClickThrough}
-            onClick={(event) => onToggleClickThrough?.(event.currentTarget)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-colors cursor-pointer text-[10px] font-semibold ${
-              isClickThrough
-                ? "text-amber-200 bg-amber-400/20 border-amber-300/40 hover:bg-amber-400/30"
-                : "text-slate-200 bg-white/5 border-white/15 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <MousePointer className="w-3.5 h-3.5" />
-            <span>{isClickThrough ? "Click-through on" : "Click-through"}</span>
-          </button>
         </Tooltip>
 
         {/* Collapse / Expand Toggle */}
@@ -620,21 +583,23 @@ function InterviewTopBarComponent({
 
               {/* 8. Auto Answer Toggle */}
               <div className="flex items-center justify-between px-2.5 py-1.5 text-slate-200">
-                <span>Auto Answer</span>
+                <span>{autoAnswerLocked ? "Manual response" : "Auto Answer"}</span>
                 <button
                   type="button"
                   onClick={() =>
-                    onAutoAnswerChange && onAutoAnswerChange(!autoAnswer)
+                    !autoAnswerLocked && onAutoAnswerChange && onAutoAnswerChange(!autoAnswer)
                   }
-                  className={`w-9 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-200 flex items-center ${
-                    autoAnswer
+                  disabled={autoAnswerLocked}
+                  aria-label={autoAnswerLocked ? "Automatic answers are paused in audio task mode" : "Toggle automatic answers"}
+                  className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 flex items-center ${
+                    autoAnswer && !autoAnswerLocked
                       ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                       : "bg-white/15"
-                  }`}
+                  } ${autoAnswerLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      autoAnswer ? "translate-x-4" : "translate-x-0"
+                      autoAnswer && !autoAnswerLocked ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>

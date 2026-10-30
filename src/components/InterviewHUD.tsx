@@ -62,11 +62,20 @@ export function InterviewHUD({
 }: InterviewHUDProps) {
   const [showAnswer, setShowAnswer] = useState(true);
   const [showChat, setShowChat] = useState(false);
+  const [isTranscriptPanelMinimized, setIsTranscriptPanelMinimized] = useState(true);
   const selectedLanguage = language;
   const [opacity, setOpacity] = useState(0.95);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [fontSizeLevel, setFontSizeLevel] = useState(0);
   const [autoAnswer, setAutoAnswer] = useState(true);
+  const [audioTaskMode, setAudioTaskMode] = useState(false);
+  const [audioTaskListening, setAudioTaskListening] = useState(false);
+  const [audioTaskFinalizing, setAudioTaskFinalizing] = useState(false);
+  const [audioTaskStartIndex, setAudioTaskStartIndex] = useState(0);
+  const [audioTaskTranscript, setAudioTaskTranscript] = useState("");
+  const [audioTaskError, setAudioTaskError] = useState("");
+  const previousAutoAnswerRef = useRef(true);
+  const transcriptListRef = useRef<any[]>([]);
   const [isClickThrough, setIsClickThrough] = useState(false);
   const [localCollapsed, setLocalCollapsed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -222,6 +231,83 @@ export function InterviewHUD({
   }, [analyzeScreenshot, showToast]);
 
   const sessionStartTimeRef = useRef<number>(Date.now());
+
+  const liveAudioTaskTranscript = useMemo(
+    () => transcriptList
+      .slice(audioTaskStartIndex)
+      .filter((item) => !/^(you|candidate|user)$/i.test(item.speaker || ""))
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .join(" "),
+    [transcriptList, audioTaskStartIndex],
+  );
+
+  useEffect(() => {
+    transcriptListRef.current = transcriptList;
+  }, [transcriptList]);
+
+  const enterAudioTaskMode = useCallback(() => {
+    previousAutoAnswerRef.current = autoAnswer;
+    setAudioTaskStartIndex(transcriptList.length);
+    setAudioTaskTranscript("");
+    setAudioTaskError("");
+    setAudioTaskMode(true);
+    setAutoAnswer(false);
+  }, [autoAnswer, transcriptList.length]);
+
+  const exitAudioTaskMode = useCallback(() => {
+    setAudioTaskListening(false);
+    setAudioTaskFinalizing(false);
+    setAudioTaskMode(false);
+    setAudioTaskTranscript("");
+    setAudioTaskError("");
+    setAutoAnswer(previousAutoAnswerRef.current);
+  }, []);
+
+  const startAudioTaskClip = useCallback(() => {
+    setAudioTaskError("");
+    if (!isBackendConnected) {
+      setAudioTaskError("Connect to Ghostove before starting the audio clip.");
+      return;
+    }
+    if (!isSharedAudioActive) {
+      setAudioTaskError("Turn on system audio from the top bar first, then start listening.");
+      return;
+    }
+    setAudioTaskTranscript("");
+    setAudioTaskStartIndex(transcriptList.length);
+    setAudioTaskListening(true);
+  }, [isBackendConnected, isSharedAudioActive, transcriptList.length]);
+
+  const finishAudioTaskClip = useCallback(() => {
+    setAudioTaskListening(false);
+    setAudioTaskFinalizing(true);
+    window.setTimeout(() => {
+      const finalTranscript = transcriptListRef.current
+        .slice(audioTaskStartIndex)
+        .filter((item) => !/^(you|candidate|user)$/i.test(item.speaker || ""))
+        .map((item) => item.text.trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      setAudioTaskTranscript(finalTranscript);
+      setAudioTaskFinalizing(false);
+      if (!finalTranscript) {
+        setAudioTaskError("No words were recognized. Check that system audio is enabled, replay the clip, and try again.");
+      }
+    }, 1200);
+  }, [audioTaskStartIndex]);
+
+  const requestAudioTaskResponse = useCallback(() => {
+    setAudioTaskError("");
+    if (!audioTaskTranscript.trim()) {
+      setAudioTaskError("No speech was detected. Listen to the clip again.");
+      return;
+    }
+    if (!askQuestion(audioTaskTranscript.trim(), "Audio task")) {
+      setAudioTaskError("Ghostove is reconnecting. Wait for it to connect, then request the response again.");
+    }
+  }, [askQuestion, audioTaskTranscript]);
 
   const handleEndSession = useCallback(async () => {
     // 1. Calculate duration in seconds
@@ -472,6 +558,36 @@ export function InterviewHUD({
     };
   }, []);
 
+  const renderTranscriptPanel = (isMinimized: boolean) => (
+    <InterviewTranscriptPanel
+      transcriptList={transcriptList}
+      interimText={interimText}
+      isSpeaking={isSpeaking}
+      volumeLevel={volumeLevel}
+      onClear={clearTranscripts}
+      isMinimized={isMinimized}
+      onToggleMinimized={() => setIsTranscriptPanelMinimized((value) => !value)}
+      audioTaskMode={audioTaskMode}
+      onAudioTaskModeChange={(enabled) => {
+        if (enabled === audioTaskMode) return;
+        if (enabled) enterAudioTaskMode();
+        else exitAudioTaskMode();
+      }}
+      audioTaskTranscriptText={audioTaskTranscript || liveAudioTaskTranscript}
+      audioTaskListening={audioTaskListening}
+      audioTaskFinalizing={audioTaskFinalizing}
+      hasAudioTaskTranscript={Boolean(audioTaskTranscript)}
+      audioTaskError={audioTaskError}
+      isSharedAudioActive={isSharedAudioActive}
+      isBackendConnected={isBackendConnected}
+      isGenerating={isGenerating}
+      onStartAudioTaskClip={startAudioTaskClip}
+      onFinishAudioTaskClip={finishAudioTaskClip}
+      onPrepareAudioTaskResponse={requestAudioTaskResponse}
+      fontSizeLevel={fontSizeLevel}
+    />
+  );
+
   return (
     <div
       style={{
@@ -559,7 +675,7 @@ export function InterviewHUD({
         onCancel={cancelEndSession}
         onConfirm={confirmEndSession}
       />
-      <div className="w-full max-w-[920px] mb-3 shrink-0 relative z-50" data-hud-hit-region>
+      <div className="w-full max-w-[680px] mb-3 shrink-0 relative z-50" data-hud-hit-region>
         <InterviewTopBar
           showAnswer={showAnswer}
           onToggleAnswer={handleToggleAnswer}
@@ -580,7 +696,6 @@ export function InterviewHUD({
           onToggleCollapse={toggleCollapse}
           onOpenScreenPosition={onOpenScreenPosition}
           onToggleClickThrough={handleToggleClickThrough}
-          isClickThrough={isClickThrough}
           opacity={opacity}
           onOpacityChange={setOpacity}
           onLogout={onLogout}
@@ -590,18 +705,25 @@ export function InterviewHUD({
           onFontSizeChange={setFontSizeLevel}
           userEmail={userEmail}
           selectedLanguage={selectedLanguage}
-          autoAnswer={autoAnswer}
+          autoAnswer={autoAnswer && !audioTaskMode}
+          autoAnswerLocked={audioTaskMode}
           onAutoAnswerChange={setAutoAnswer}
           onEdit={() => showToast("Session context & prompt settings")}
         />
       </div>
+
+      {!isCollapsed && isTranscriptPanelMinimized && (
+        <div className="mb-3 w-full max-w-[680px] shrink-0">
+          {renderTranscriptPanel(true)}
+        </div>
+      )}
 
       {!isCollapsed &&
         remainingSeconds !== null &&
         remainingSeconds > 0 &&
         remainingSeconds <= 300 && (
           <div
-            className={`w-full max-w-[920px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
+            className={`w-full max-w-[680px] mb-3 shrink-0 rounded-xl border px-4 py-2.5 flex items-center justify-between gap-3 ${
               remainingSeconds <= 60
                 ? "border-rose-400/30 bg-rose-950/70 text-rose-100"
                 : "border-amber-400/30 bg-amber-950/60 text-amber-100"
@@ -635,7 +757,7 @@ export function InterviewHUD({
       {!isCollapsed && (
         <div className="w-full max-w-[920px] flex items-start justify-center gap-4 flex-1 overflow-x-hidden relative z-10">
           {/* Left Column: Chat input (if open) + Answer Panel (if open) */}
-          <div className="flex-1 flex flex-col min-w-0 max-w-[680px]">
+          <div className="flex min-w-0 flex-1 flex-col max-w-[680px]">
             {/* Chat Drawer for typing manually */}
             <InterviewChatInput
               isOpen={showChat}
@@ -658,22 +780,19 @@ export function InterviewHUD({
                 onPrevQA={goToPrevQA}
                 onNextQA={goToNextQA}
                 fontSizeLevel={fontSizeLevel}
+                onMinimize={() => setShowAnswer(false)}
+                isClickThrough={isClickThrough}
+                onToggleClickThrough={handleToggleClickThrough}
               />
             )}
           </div>
 
           {/* Right Column: Transcript Panel */}
-          <div className="w-[320px] shrink-0">
-            <InterviewTranscriptPanel
-              transcriptList={transcriptList}
-              interimText={interimText}
-              isSpeaking={isSpeaking}
-              volumeLevel={volumeLevel}
-              onClear={clearTranscripts}
-              selectedLanguage={selectedLanguage}
-              fontSizeLevel={fontSizeLevel}
-            />
-          </div>
+          {!isTranscriptPanelMinimized && (
+            <div className="w-[320px] shrink-0">
+              {renderTranscriptPanel(false)}
+            </div>
+          )}
         </div>
       )}
     </div>

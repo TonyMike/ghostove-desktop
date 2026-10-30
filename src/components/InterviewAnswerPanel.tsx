@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
   Copy,
@@ -11,9 +11,8 @@ import {
   MessageCircle,
   Code2,
   Check,
-  Move,
+  MousePointer,
 } from 'lucide-react';
-import { startDragging } from '../utils/windowManager';
 import { Tooltip } from './common/Tooltip';
 
 interface InterviewAnswerPanelProps {
@@ -30,6 +29,9 @@ interface InterviewAnswerPanelProps {
   onPrevQA?: () => void;
   onNextQA?: () => void;
   fontSizeLevel?: number;
+  onMinimize?: () => void;
+  isClickThrough: boolean;
+  onToggleClickThrough: (control?: HTMLElement) => void;
 }
 
 const CODE_KEYWORDS = new Set(
@@ -91,23 +93,19 @@ function InterviewAnswerPanelComponent({
   onPrevQA,
   onNextQA,
   fontSizeLevel = 0,
+  onMinimize,
+  isClickThrough,
+  onToggleClickThrough,
 }: InterviewAnswerPanelProps) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Dynamic typography sizes based on fontSizeLevel (-2 to +4)
   const baseSize = Math.max(10, 13 + (fontSizeLevel || 0) * 1.5);
   const headingSize = Math.max(11, 14 + (fontSizeLevel || 0) * 1.5);
   const codeSize = Math.max(9.5, 12 + (fontSizeLevel || 0) * 1.2);
   const questionSize = Math.max(11, 13.5 + (fontSizeLevel || 0) * 1.5);
-
-  useEffect(() => {
-    if (isGenerating && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [answer, streamingToken, isGenerating]);
 
   const handleCopy = () => {
     const textToCopy = question ? `Question: ${question}\n\nAnswer: ${answer}` : answer;
@@ -483,21 +481,16 @@ function CodeBlockCard({ code, language, codeSize }: { code: string; language: s
             </button>
           </Tooltip>
 
-          {/* Drag Handle: Hold down to drag HUD */}
-          <Tooltip content="Drag Panel" position="top">
-            <div
-              role="button"
-              tabIndex={0}
-              onMouseDown={(e) => {
-                if (e.button === 0) {
-                  e.preventDefault();
-                  startDragging();
-                }
-              }}
-              className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-move select-none active:scale-95 active:text-amber-400"
+          {/* Hide the answer panel; restore it from the top-bar Answer button. */}
+          <Tooltip content="Minimize answer panel" position="top">
+            <button
+              type="button"
+              aria-label="Minimize answer panel"
+              onClick={onMinimize}
+              className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
             >
-              <Move className="w-3.5 h-3.5" />
-            </div>
+              <Minimize2 className="w-3.5 h-3.5" />
+            </button>
           </Tooltip>
 
           {/* Expand/Contract Toggle */}
@@ -533,7 +526,6 @@ function CodeBlockCard({ code, language, codeSize }: { code: string; language: s
 
       {/* Main Body: Question + Answer */}
       <div
-        ref={scrollRef}
         className="flex-1 overflow-y-auto pr-1 space-y-3.5 scrollbar-thin scrollbar-thumb-white/15 scrollbar-track-transparent"
       >
         {/* Question Header */}
@@ -618,16 +610,34 @@ function CodeBlockCard({ code, language, codeSize }: { code: string; language: s
 
       {/* Bottom Footer Row */}
       <div className="pt-3 mt-2 border-t border-white/10 flex items-center justify-between text-xs select-none">
-        {/* Left: Timestamp / Source Badge */}
-        <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
+        {/* Left: Click-through control and optional source badge */}
+        <div className="flex items-center gap-2 text-slate-400 text-[11px] font-medium">
+          <Tooltip
+            content={isClickThrough ? 'Turn click-through off' : 'Let clicks pass through the HUD'}
+            position="top"
+          >
+            <button
+              type="button"
+              data-click-through-toggle
+              aria-label={isClickThrough ? 'Turn click-through off' : 'Turn click-through on'}
+              aria-pressed={isClickThrough}
+              onClick={(event) => onToggleClickThrough(event.currentTarget)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 transition-colors cursor-pointer text-[10px] font-semibold ${
+                isClickThrough
+                  ? 'text-amber-200 bg-amber-400/20 border-amber-300/40 hover:bg-amber-400/30'
+                  : 'text-slate-300 bg-white/5 border-white/10 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <MousePointer className="h-3.5 w-3.5" />
+              <span>{isClickThrough ? 'Click-through on' : 'Click-through'}</span>
+            </button>
+          </Tooltip>
           {sourceType ? (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               <span>{sourceType}</span>
             </>
-          ) : (
-            <span className="text-slate-500 italic">Listening for speech...</span>
-          )}
+          ) : null}
         </div>
 
         {/* Right: Feedback & Copy Controls */}

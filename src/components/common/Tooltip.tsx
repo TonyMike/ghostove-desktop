@@ -143,11 +143,11 @@ export function Tooltip({
               maxHeight: 'calc(100vh - 16px)',
               overflowY: 'auto',
             }}
-            className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1014]/98 border border-white/20 text-slate-100 text-[11px] font-medium shadow-[0_10px_25px_-5px_rgba(0,0,0,0.95)] backdrop-blur-md animate-fade-in"
+            className="pointer-events-none select-none flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#0e1014]/85 text-slate-100 text-[11px] font-medium shadow-none backdrop-blur-md animate-fade-in"
           >
             <span>{content}</span>
             {shortcut && (
-              <span className="font-mono text-[9.5px] font-bold text-slate-400 bg-white/10 border border-white/10 px-1 py-0.2 rounded shadow-xs">
+              <span className="font-mono text-[9.5px] font-bold text-slate-300 bg-white/10 px-1 py-0.2 rounded">
                 {shortcut}
               </span>
             )}
