@@ -71,7 +71,7 @@ function InterviewTranscriptPanelComponent({
     return (
       <div
         data-hud-hit-region
-        className="flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-emerald-500/20 bg-slate-950/90 px-3 text-white backdrop-blur-2xl"
+        className="relative z-50 flex h-12 min-w-0 items-center gap-2 rounded-2xl border border-emerald-500/20 bg-slate-950/90 px-3 text-white backdrop-blur-2xl"
         aria-label="Minimized transcription panel"
         role="status"
         aria-live="polite"
@@ -96,6 +96,42 @@ function InterviewTranscriptPanelComponent({
             </span>
           )}
         </div>
+        <details className="relative shrink-0">
+          <summary
+            aria-label={`Mode: ${audioTaskMode ? 'Audio task' : 'Interview'}`}
+            className="flex list-none cursor-pointer items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-slate-200 marker:hidden transition-colors hover:border-emerald-400/30 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+          >
+            <span>{audioTaskMode ? 'Audio task' : 'Interview'}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+          </summary>
+          <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-xl" role="group" aria-label="Choose interview mode">
+            <button
+              type="button"
+              aria-pressed={!audioTaskMode}
+              onClick={(event) => {
+                onAudioTaskModeChange(false);
+                event.currentTarget.closest('details')?.removeAttribute('open');
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              <span className="flex-1">Interview mode</span>
+              {!audioTaskMode && <Check className="h-3.5 w-3.5 text-emerald-300" />}
+            </button>
+            <button
+              type="button"
+              aria-pressed={audioTaskMode}
+              onClick={(event) => {
+                onAudioTaskModeChange(true);
+                event.currentTarget.closest('details')?.removeAttribute('open');
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              <Headphones className="h-3.5 w-3.5 text-emerald-300" />
+              <span className="flex-1">Audio task mode</span>
+              {audioTaskMode && <Check className="h-3.5 w-3.5 text-emerald-300" />}
+            </button>
+          </div>
+        </details>
         <Tooltip content="Clear Transcript History" shortcut="⌘⇧⌫" position="top">
           <button
             type="button"

@@ -9,8 +9,7 @@ import {
   HelpCircle,
   LogOut,
   SlidersHorizontal,
-  Volume2,
-  VolumeX,
+  MonitorSpeaker,
   Mic,
   MicOff,
   User,
@@ -209,11 +208,7 @@ function InterviewTopBarComponent({
             {isSharedAudioActive && (
               <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
             )}
-            {isSharedAudioActive ? (
-              <Volume2 className="w-4 h-4 text-emerald-300" />
-            ) : (
-              <VolumeX className="w-4 h-4" />
-            )}
+            <MonitorSpeaker className={`w-4 h-4 ${isSharedAudioActive ? 'text-emerald-300' : ''}`} />
           </button>
         </Tooltip>
 
